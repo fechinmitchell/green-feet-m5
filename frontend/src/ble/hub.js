@@ -385,8 +385,8 @@ export class Hub extends Emitter {
   }
 
   /** Demo only: put both feet on a slope (foot frame, percent). */
-  demoPose(pose) {
-    this.sticks.forEach((s) => s.kind === 'demo' && s.setPose(pose));
+  demoPose(pose, side) {
+    this.sticks.forEach((s) => s.kind === 'demo' && (!side || s.side === side) && s.setPose(pose));
   }
   demoPress() {
     this.sticks.find((s) => s.kind === 'demo')?.pressA();
@@ -411,9 +411,9 @@ export class Hub extends Emitter {
    * the averaged "up" vector per side. Restarts the window whenever a foot moves.
    * onProgress(fraction 0..1, stillNow) is called as it goes.
    */
-  capture({ seconds = 2, timeout = 15, onProgress, signal } = {}) {
+  capture({ seconds = 2, timeout = 15, onProgress, signal, only, still = STILL } = {}) {
     return new Promise((resolve, reject) => {
-      const sticks = this.connected;
+      const sticks = this.connected.filter((s) => !only || only.includes(s.side));
       if (!sticks.length) return reject(new Error('No sticks connected.'));
       this.fast(true);
       let samples = new Map(sticks.map((s) => [s, []]));
@@ -430,7 +430,7 @@ export class Hub extends Emitter {
       offs.push(
         ...sticks.map((s) =>
           s.on('tilt', (t) => {
-            if (t.motion > STILL) {
+            if (t.motion > still) {
               samples = new Map(sticks.map((x) => [x, []]));
               start = performance.now();
             } else {
@@ -443,8 +443,8 @@ export class Hub extends Emitter {
       const timer = setInterval(() => {
         const now = performance.now();
         const frac = Math.min(1, (now - start) / (seconds * 1000));
-        const still = sticks.every((s) => (s.latest?.motion ?? 1) <= STILL);
-        onProgress?.(frac, still);
+        const steady = sticks.every((s) => (s.latest?.motion ?? 1) <= still);
+        onProgress?.(frac, steady);
         if (frac >= 1 && [...samples.values()].every((list) => list.length >= 5)) {
           const out = {};
           for (const [s, list] of samples) out[s.side === '?' ? s.id : s.side] = vec.mean(list);

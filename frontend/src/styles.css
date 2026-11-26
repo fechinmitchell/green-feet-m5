@@ -228,3 +228,23 @@ input[type='range'] { width: 100%; accent-color: var(--green-2); height: 32px; }
 .table { width: 100%; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
 .table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .table td { padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+
+/* Putt screen */
+.howto-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 1rem; }
+.howto-steps li::marker { color: var(--green-2); font-weight: 800; }
+.puttmap { width: 100%; display: block; }
+.pm-line { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 6 5; }
+.pm-ball { fill: var(--card); stroke: var(--ink); stroke-width: 2; }
+.pm-hole { fill: var(--ink); }
+.pm-t { fill: var(--muted); font: 600 11px var(--font); }
+.pm-foot { fill: var(--line); }
+.pm-now .pm-foot { fill: var(--green-2); }
+.pm-now .pm-t { fill: var(--ink); font-weight: 800; }
+.pm-done .pm-foot { fill: var(--green-soft); stroke: var(--green-2); }
+.live { border: 2px solid var(--green-2); }
+.pill-state { font-size: .78rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--sun); color: #2a2000; }
+.pill-state.ok { background: var(--green-2); color: #fff; }
+.tiltbar { position: relative; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--green-soft), var(--card) 50%, var(--green-soft)); border: 1px solid var(--line); }
+.tb-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--muted); }
+.tb-dot { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--green-2); border: 2px solid var(--card); transition: left .15s; }
+.toggle.bare { border: none; padding: 0; }

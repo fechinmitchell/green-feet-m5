@@ -15,12 +15,22 @@ test('calibration recovers the true slope for crooked mounts on a sloped calibra
   for (let i = 0; i < 200; i++) {
     const mount = randomMount(rand, 10);
     const spot = { cross: (rand() * 2 - 1) * 5, along: (rand() * 2 - 1) * 5 };
-    const cal = solveCalibration(calibrationPoses(mount, spot));
+    const { flat, heelUp, turned } = calibrationPoses(mount, spot);
+    const cal = solveCalibration({ flat, heelUp, turned });
     const truth = { cross: (rand() * 2 - 1) * 5, along: (rand() * 2 - 1) * 5 };
     const got = footSlope(cal, sensorUp(mount, truth.cross, truth.along));
     assert.ok(Math.abs(got.cross - truth.cross) < 0.05, `cross ${got.cross} vs ${truth.cross}`);
     assert.ok(Math.abs(got.along - truth.along) < 0.05, `along ${got.along} vs ${truth.along}`);
   }
+});
+
+test('older toe-lift calibration still works', () => {
+  const rand = seeded(9);
+  const mount = randomMount(rand, 10);
+  const { flat, heels, turned } = calibrationPoses(mount, { cross: 1, along: -2 });
+  const cal = solveCalibration({ flat, heels, turned });
+  const got = footSlope(cal, sensorUp(mount, 2, 3));
+  assert.ok(Math.abs(got.cross - 2) < 0.05 && Math.abs(got.along - 3) < 0.05);
 });
 
 test('two feet average', () => {
@@ -35,11 +45,11 @@ test('two feet average', () => {
   assert.equal(s.feet, 2);
 });
 
-test('calibration rejects a lazy heel rock', () => {
+test('calibration rejects a lazy heel rock or heel lift', () => {
   const mount = randomMount(seeded(1));
-  const poses = calibrationPoses(mount);
-  poses.heels = sensorUp(mount, 0, 1);
-  assert.throws(() => solveCalibration(poses), /heel rock/);
+  const { flat, turned } = calibrationPoses(mount);
+  assert.throws(() => solveCalibration({ flat, turned, heels: sensorUp(mount, 0, 1) }), /heel rock/);
+  assert.throws(() => solveCalibration({ flat, turned, heelUp: sensorUp(mount, 0, -1) }), /heel lift/);
 });
 
 test('aim: right side high breaks left, fingers follow speed', () => {

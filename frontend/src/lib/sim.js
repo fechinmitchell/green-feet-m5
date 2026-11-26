@@ -41,6 +41,7 @@ export function calibrationPoses(mount, spot = { cross: 0, along: 0 }) {
   return {
     flat: sensorUp(mount, spot.cross, spot.along),
     heels: sensorUp(mount, spot.cross, spot.along + 15),
+    heelUp: sensorUp(mount, spot.cross, spot.along - 25), // heel raised: toe down
     turned: sensorUp(mount, -spot.cross, -spot.along),
   };
 }

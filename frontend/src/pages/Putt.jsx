@@ -5,11 +5,9 @@ import { aimFromReadings, coach, missAdvice, standSlope } from '../lib/slope.js'
 import { store } from '../lib/store.js';
 import { Chips, Fingers, Level, fmt } from '../components/ui.jsx';
 
-const LENGTHS = [
-  { value: 'short', label: 'Under 6 ft' },
-  { value: 'mid', label: '6–20 ft' },
-  { value: 'long', label: '20+ ft' },
-];
+const PACE_FT = 3; // one normal walking pace is about 3 ft (0.9 m)
+const paces = (ft) => Math.max(1, Math.round(ft / PACE_FT));
+const metres = (ft) => (ft * 0.3048).toFixed(1);
 
 function newDemoGreen() {
   // Demo only: a random green. Sometimes a double breaker.
@@ -24,7 +22,9 @@ export default function Putt() {
   const { settings, calibration, putts } = useStore();
   const learn = settings.mode === 'learn';
   const [step, setStep] = useState(learn ? 'guess' : 'measure');
-  const [guess, setGuess] = useState({ pct: 2, breaks: 'right', length: 'mid' });
+  const [guess, setGuess] = useState({ pct: 2, breaks: 'right' });
+  const [distance, setDistance] = useState(() => putts[putts.length - 1]?.distance ?? 12);
+  const [editDistance, setEditDistance] = useState(false);
   const [guessed, setGuessed] = useState(false);
   const [twoReads, setTwoReads] = useState(false);
   const [readings, setReadings] = useState([]);
@@ -102,6 +102,7 @@ export default function Putt() {
       speed: settings.speed,
       mode: settings.mode,
       guess: guessed ? guess : null,
+      distance,
       readings: readings.map((r) => ({ cross: round2(r.cross), along: round2(r.along), spread: round2(r.spread) })),
       aim: aim && { cross: round2(aim.cross), along: round2(aim.along), fingers: aim.fingers, breaks: aim.breaks },
       outcome: result,
@@ -169,12 +170,14 @@ export default function Putt() {
 
       {step === 'guess' && (
         <>
-          <p>
-            Stand at the ball. <b>What do your feet say?</b>
-          </p>
+          <ol className="howto-steps">
+            <li>Stand behind the ball and look at the line.</li>
+            <li>Straddle the line near the ball and <b>feel which foot has more pressure</b>. That’s the low side.</li>
+            <li>Put your guess in below. Then the sticks check it.</li>
+          </ol>
           <div className="card">
             <label className="row-between" htmlFor="guess-pct">
-              <span>Slope</span>
+              <span>Your slope guess</span>
               <b className="big-num">{fmt(guess.pct)}%</b>
             </label>
             <input id="guess-pct" type="range" min="0" max="5" step="0.5" value={guess.pct} onChange={(e) => setGuess({ ...guess, pct: Number(e.target.value) })} />
@@ -185,7 +188,7 @@ export default function Putt() {
             </div>
           </div>
           <div className="card">
-            <span>Breaks</span>
+            <span>It breaks…</span>
             <Chips
               label="Break direction"
               value={guess.breaks}
@@ -197,27 +200,27 @@ export default function Putt() {
               ]}
             />
           </div>
-          <div className="card">
-            <span>Length</span>
-            <Chips label="Putt length" value={guess.length} onChange={(v) => setGuess({ ...guess, length: v })} options={LENGTHS} />
-          </div>
-          <button className="btn primary big" onClick={() => {
-            if (guess.length === 'long') setTwoReads(true);
-            setGuessed(true);
-            setStep('measure');
-          }}>
-            Lock in my read
+          <DistanceSlider distance={distance} setDistance={setDistance} />
+          <button
+            className="btn primary big"
+            onClick={() => {
+              setTwoReads(distance > 20);
+              setGuessed(true);
+              setStep('measure');
+            }}
+          >
+            Lock in my read <small>or press A on a stick</small>
           </button>
-          <button className="btn ghost" onClick={() => {
-            if (guess.length === 'long') setTwoReads(true);
-            setGuessed(false);
-            setStep('measure');
-          }}>
-            Skip guess, just read it <small>or B on a stick</small>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              setTwoReads(distance > 20);
+              setGuessed(false);
+              setStep('measure');
+            }}
+          >
+            Skip guess, just measure <small>or B on a stick</small>
           </button>
-          <div className="tip">
-            <b>Feeling it:</b> stand with your feet either side of the line. The foot that feels heavier is on the low side, and the ball breaks toward it.
-          </div>
         </>
       )}
 
@@ -229,28 +232,40 @@ export default function Putt() {
 
       {step === 'measure' && (
         <>
-          <p>
-            {twoReads ? (
-              readings.length === 0 ? (
-                <>
-                  Walk to the <b>middle of the first half</b> of the putt. Straddle the line, face the hole, then press <b>A</b>.
-                </>
+          <PuttMap distance={distance} twoReads={twoReads} readingIndex={readings.length} />
+
+          <ol className="howto-steps">
+            <li>
+              {twoReads ? (
+                readings.length === 0 ? (
+                  <>
+                    Walk <b>{paces(distance / 4)} paces</b> toward the hole, a quarter of the way.
+                  </>
+                ) : (
+                  <>
+                    Now walk on to <b>{paces((distance * 3) / 4)} paces</b> from the ball, three quarters of the way, near the hole.
+                  </>
+                )
               ) : (
                 <>
-                  Now the <b>last third, near the hole</b>. Straddle the line, face the hole, press <b>A</b>.
+                  Walk <b>{paces(distance / 2)} paces</b> toward the hole, to halfway ({Math.round(distance / 2)} ft).
                 </>
-              )
-            ) : (
-              <>
-                Walk to <b>halfway</b>. Straddle the line with feet shoulder-width apart, face the hole, then press <b>A</b> on either stick.
-              </>
+              )}
+            </li>
+            <li>
+              <b>Straddle the line</b>, one foot each side, shoulder-width apart, <b>facing the hole</b>.
+            </li>
+            {learn && (
+              <li>
+                <b>Feel it first:</b> which foot has more pressure? That’s the low side.
+              </li>
             )}
-          </p>
+            <li>
+              Stand still and press <b>A</b> on a stick, or tap Take reading.
+            </li>
+          </ol>
 
-          <div className="levels">
-            <Level label="Left" data={live.L} />
-            <Level label="Right" data={live.R} />
-          </div>
+          <LiveRead live={live} />
 
           {progress != null ? (
             <div className="card">
@@ -264,23 +279,48 @@ export default function Putt() {
             </div>
           ) : (
             <button className="btn primary big" onClick={measure}>
-              Take reading <small>or press A on a stick</small>
+              Take reading {twoReads ? `${readings.length + 1} of 2` : ''} <small>or press A on a stick</small>
             </button>
           )}
           {error && <p className="error">{error}</p>}
 
-          {readings.length === 0 && (
-            <label className="toggle">
-              <input type="checkbox" checked={twoReads} onChange={(e) => setTwoReads(e.target.checked)} />
-              <span>
-                <b>Breaks both ways, or a long putt</b>
-                <small>Take two readings: one in each half. The hole end counts for more.</small>
-              </span>
-            </label>
-          )}
           {readings.length === 1 && (
-            <div className="card mono">Reading 1: {fmt(Math.abs(readings[0].cross))}% {readings[0].cross > 0.3 ? 'breaks left' : readings[0].cross < -0.3 ? 'breaks right' : 'flat'}</div>
+            <div className="card mono">
+              Reading 1: {fmt(Math.abs(readings[0].cross))}% {readings[0].cross > 0.3 ? 'breaks left' : readings[0].cross < -0.3 ? 'breaks right' : 'flat'}
+            </div>
           )}
+
+          {readings.length === 0 && (
+            <div className="card">
+              {editDistance || !guessed ? (
+                <DistanceSlider distance={distance} setDistance={setDistance} bare />
+              ) : (
+                <div className="row-between">
+                  <span>
+                    Putt length <b>{distance} ft</b>
+                  </span>
+                  <button className="chip" onClick={() => setEditDistance(true)}>
+                    Change
+                  </button>
+                </div>
+              )}
+              <label className="toggle bare">
+                <input type="checkbox" checked={twoReads} onChange={(e) => setTwoReads(e.target.checked)} />
+                <span>
+                  <b>Two readings</b>
+                  <small>For long putts (on automatically over 20 ft) or ones that break both ways. The hole end counts for more.</small>
+                </span>
+              </label>
+            </div>
+          )}
+
+          <details className="card">
+            <summary>Each foot separately</summary>
+            <div className="levels">
+              <Level label="Left" data={live.L} />
+              <Level label="Right" data={live.R} />
+            </div>
+          </details>
         </>
       )}
 
@@ -377,6 +417,90 @@ export default function Putt() {
           Demo: press A on stick
         </button>
       )}
+    </div>
+  );
+}
+
+function DistanceSlider({ distance, setDistance, bare = false }) {
+  const body = (
+    <>
+      <label className="row-between" htmlFor="putt-dist">
+        <span>Putt length</span>
+        <b className="big-num">{distance} ft</b>
+      </label>
+      <input id="putt-dist" type="range" min="3" max="60" step="1" value={distance} onChange={(e) => setDistance(Number(e.target.value))} />
+      <div className="scale mono">
+        <span>3 ft</span>
+        <span>
+          {metres(distance)} m · about {paces(distance)} paces
+        </span>
+        <span>60 ft</span>
+      </div>
+    </>
+  );
+  return bare ? body : <div className="card">{body}</div>;
+}
+
+/** Top-down sketch: ball, hole, and where to stand. */
+function PuttMap({ distance, twoReads, readingIndex }) {
+  const x0 = 26, x1 = 314;
+  const spots = twoReads ? [0.25, 0.75] : [0.5];
+  const x = (f) => x0 + f * (x1 - x0);
+  return (
+    <svg viewBox="0 0 340 92" className="puttmap" role="img" aria-label={`Ball to hole ${distance} feet, stand ${twoReads ? 'a quarter and three quarters' : 'halfway'} along the line`}>
+      <line x1={x0} y1="46" x2={x1} y2="46" className="pm-line" />
+      <circle cx={x0} cy="46" r="6" className="pm-ball" />
+      <text x={x0} y="74" textAnchor="middle" className="pm-t">ball</text>
+      <circle cx={x1} cy="46" r="9" className="pm-hole" />
+      <text x={x1} y="74" textAnchor="middle" className="pm-t">hole</text>
+      {spots.map((f, i) => {
+        const now = i === readingIndex;
+        const done = i < readingIndex;
+        return (
+          <g key={f} className={now ? 'pm-now' : done ? 'pm-done' : 'pm-later'}>
+            <rect x={x(f) - 8} y="24" width="16" height="9" rx="4" className="pm-foot" />
+            <rect x={x(f) - 8} y="59" width="16" height="9" rx="4" className="pm-foot" />
+            <text x={x(f)} y="14" textAnchor="middle" className="pm-t">
+              {done ? '✓' : `${paces(distance * f)} paces`}
+            </text>
+          </g>
+        );
+      })}
+      <text x={(x0 + x1) / 2} y="88" textAnchor="middle" className="pm-t">
+        {distance} ft
+      </text>
+    </svg>
+  );
+}
+
+/** One simple live number: the slope where you're standing right now. */
+function LiveRead({ live }) {
+  const feet = ['L', 'R'].map((s) => live[s]).filter((f) => f && f.cross != null);
+  if (!feet.length) return <div className="card hint">Waiting for the sticks…</div>;
+  const cross = feet.reduce((a, f) => a + f.cross, 0) / feet.length;
+  const along = feet.reduce((a, f) => a + f.along, 0) / feet.length;
+  const steady = feet.every((f) => (f.motion ?? 1) <= 0.025);
+  const a = aimFromReadings([{ cross, along }]);
+  const pos = Math.max(-1, Math.min(1, -cross / 4)); // marker toward the low side
+  return (
+    <div className="card live">
+      <div className="row-between">
+        <span className="mono">RIGHT NOW</span>
+        <span className={`pill-state ${steady ? 'ok' : ''}`}>{steady ? 'Steady' : 'Moving…'}</span>
+      </div>
+      <div className="row-between">
+        <b className="big-num">{fmt(a.pct)}%</b>
+        <span>{a.breaks === 'straight' ? 'about straight' : `breaks ${a.breaks === 'left' ? '← left' : 'right →'}`}</span>
+      </div>
+      <div className="tiltbar" aria-hidden="true">
+        <span className="tb-mid" />
+        <span className="tb-dot" style={{ left: `${50 + pos * 46}%` }} />
+      </div>
+      <div className="scale mono">
+        <span>low left</span>
+        <span>{a.hill === 'flat' ? 'flat along the line' : `${a.hill} ${fmt(Math.abs(along))}%`}</span>
+        <span>low right</span>
+      </div>
     </div>
   );
 }

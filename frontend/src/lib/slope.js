@@ -8,10 +8,11 @@
 //   f  which way the toe points
 //   r  which way is to the right of the foot  (r = f x u)
 //
-// Calibration (both feet at once, standing on the same spot):
-//   1. stand still facing any direction   -> a1
-//   2. lift your toes, rock onto heels    -> h   (gives the toe direction)
-//   3. turn 180 degrees, stand still      -> a2
+// Calibration (standing on the same spot):
+//   1. stand still facing any direction        -> a1   (both feet)
+//   2. lift one heel at a time, onto the ball  -> h    (gives the toe direction)
+//      (older flow: lift both toes instead, passed as `heels`)
+//   3. turn 180 degrees, stand still           -> a2   (both feet)
 //
 // Turning around flips the ground slope but not the mounting error, so the
 // average of a1 and a2 is "up on level ground", whatever the slope you stood on.
@@ -34,10 +35,10 @@ export const vec = {
 };
 
 /** Work out a stick's axes from the three calibration poses. Throws with a plain-English message if a step looks wrong. */
-export function solveCalibration({ flat, heels, turned }) {
+export function solveCalibration({ flat, heels, heelUp, turned }) {
   const a1 = vec.norm(flat);
   const a2 = vec.norm(turned);
-  const h = vec.norm(heels);
+  const h = vec.norm(heelUp || heels);
 
   const u = vec.norm(vec.add(a1, a2));
 
@@ -49,13 +50,18 @@ export function solveCalibration({ flat, heels, turned }) {
     throw new Error('The two standing readings are too different. Turn around on exactly the same spot and check the sticks are tight on your shoes.');
   }
 
-  // Lifting the toes tips "up" toward the toe in the foot's frame.
+  // Lifting the toes tips "up" toward the toe in the foot's frame; lifting the
+  // heel tips it toward the heel.
   const d = vec.sub(h, a1);
   const dPerp = vec.sub(d, vec.scale(u, vec.dot(d, u)));
   if (vec.len(dPerp) < 0.05) {
-    throw new Error('Not enough heel rock. Lift your toes higher (about a hand-width) and hold still.');
+    throw new Error(
+      heelUp
+        ? 'Not enough heel lift. Rise onto the ball of that foot, heel about 5 cm up, and hold for a second.'
+        : 'Not enough heel rock. Lift your toes higher (about a hand-width) and hold still.'
+    );
   }
-  const f = vec.norm(dPerp);
+  const f = heelUp ? vec.scale(vec.norm(dPerp), -1) : vec.norm(dPerp);
   const r = vec.norm(vec.cross(f, u));
   return { u, f, r, spotSlopePct: round1(spotSlopePct), at: Date.now() };
 }
