@@ -54,7 +54,7 @@ export default function Putt() {
     }
     if (step === 'result' && aim) {
       const arrow = aim.breaks === 'left' ? '<' : aim.breaks === 'right' ? '>' : '|';
-      hub.display('BREAK', aim.breaks === 'left' ? `${arrow}${aim.pct}` : `${aim.pct}${arrow}`, `${aim.fingers} finger${aim.fingers === 1 ? '' : 's'}\n${aim.hill}`);
+      hub.display('BREAK', aim.breaks === 'left' ? `${arrow}${aim.pct}` : `${aim.pct}${arrow}`, `${aim.fingers} finger${aim.fingers === 1 ? '' : 's'}\n${aim.hill}\nB = read again`);
     }
   }, [step, readings.length, twoReads, aim, hub, putts.length]);
 
@@ -100,6 +100,14 @@ export default function Putt() {
     });
   }
 
+  function readAgain() {
+    abortRef.current?.abort();
+    setReadings([]);
+    setOutcome(null);
+    setError('');
+    setStep('measure');
+  }
+
   function nextPutt() {
     demoGreen.current = newDemoGreen();
     setStep(learn ? 'guess' : 'measure');
@@ -117,6 +125,7 @@ export default function Putt() {
     if (b === 'B') {
       abortRef.current?.abort();
       if (step === 'measure' && readings.length) setReadings(readings.slice(0, -1));
+      if (step === 'result') readAgain();
     }
   });
 
@@ -284,9 +293,19 @@ export default function Putt() {
           {tip && <div className={`tip ${tip.dirOk ? '' : 'bad'}`}>You guessed <b>{fmt(guess.pct)}% {guess.breaks}</b>. {tip.text}</div>}
 
           {step === 'result' && (
-            <button className="btn primary big" onClick={() => setStep('log')}>
-              I’ve hit it → log result
-            </button>
+            <>
+              <button className="btn primary big" onClick={() => setStep('log')}>
+                I’ve hit it → log result
+              </button>
+              <div className="pair">
+                <button className="btn" onClick={readAgain}>
+                  ↻ Read again <small>same putt · or B on a stick</small>
+                </button>
+                <button className="btn" onClick={nextPutt}>
+                  New putt <small>don’t save this one</small>
+                </button>
+              </div>
+            </>
           )}
         </>
       )}

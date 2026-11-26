@@ -60,4 +60,8 @@ test('coach compares guess with reading', () => {
   const aim = aimFromReadings([{ cross: -2.5, along: 0 }]);
   assert.equal(coach({ pct: 2, breaks: 'right' }, aim).dirOk, true);
   assert.equal(coach({ pct: 2, breaks: 'left' }, aim).dirOk, false);
+  const flat = aimFromReadings([{ cross: 0.2, along: -2 }]);
+  const c = coach({ pct: 2, breaks: 'right' }, flat);
+  assert.match(c.text, /nearly straight/);
+  assert.doesNotMatch(c.text, /other way/);
 });

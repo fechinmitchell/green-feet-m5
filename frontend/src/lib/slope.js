@@ -137,11 +137,19 @@ export function aimFromReadings(readings, { speed = 'medium', holeWeight = 2 / 3
 export function coach(guess, aim) {
   if (!guess || !aim) return null;
   const measured = aim.pct;
-  const dirOk = guess.breaks === aim.breaks || (aim.breaks === 'straight' && guess.pct <= 1);
   const diff = guess.pct - measured;
   const lines = [];
-  if (!dirOk) {
-    lines.push(`Direction was the other way: it breaks ${aim.breaks === 'straight' ? 'very little' : 'to the ' + aim.breaks}. Feel for which foot carries more weight. That's the low side.`);
+  // A nearly straight putt has no wrong direction, only an over-read.
+  if (aim.breaks === 'straight') {
+    const ok = guess.pct <= 1;
+    lines.push(ok ? 'Spot on. It’s nearly straight. Remember what level feels like.' : `It’s nearly straight (${round1(measured)}%). You over-read it by ${round1(diff)}%. Weight even on both feet means flat.`);
+    return { dirOk: ok, diff: round1(diff), text: lines.join(' ') };
+  }
+  const dirOk = guess.breaks === aim.breaks;
+  if (!dirOk && guess.breaks === 'straight') {
+    lines.push(`It breaks ${round1(measured)}% to the ${aim.breaks}. Feel for the extra pressure on your ${aim.breaks} foot.`);
+  } else if (!dirOk) {
+    lines.push(`Direction was the other way: it breaks to the ${aim.breaks}. Feel for which foot carries more weight. That's the low side.`);
   } else if (Math.abs(diff) <= 0.5) {
     lines.push('Spot on. Remember how that felt in your feet.');
   } else if (diff > 0) {
