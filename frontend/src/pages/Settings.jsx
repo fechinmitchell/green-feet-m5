@@ -52,6 +52,9 @@ export default function Settings() {
         <input id="hw" type="range" min="0.5" max="0.85" step="0.05" value={settings.holeWeight} onChange={(e) => store.setSettings({ holeWeight: Number(e.target.value) })} />
       </details>
 
+      <Link to="/battery" className="btn">
+        Battery monitor
+      </Link>
       <Link to="/calibrate" className="btn">
         Calibrate sticks
       </Link>

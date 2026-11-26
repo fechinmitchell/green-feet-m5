@@ -31,3 +31,27 @@ test('format', () => {
   assert.equal(formatMinutes(160), '2 h 40 min');
   assert.equal(formatMinutes(120), '2 h');
 });
+
+test('current draw gives time left and session summary works', async () => {
+  const { minutesFromDraw, sessionSummary } = await import('./battery.js');
+  assert.equal(minutesFromDraw(50, 40, 120), 90); // 60 mAh left at 40 mA
+  const samples = Array.from({ length: 31 }, (_, i) => ({ t: i * MIN, pct: 90 - i, ma: -40, mah: -(i * 1.2) })); // 30% drop
+  const s = sessionSummary({ samples });
+  assert.equal(s.drop, 30);
+  assert.ok(Math.abs(s.usedMah - 36) < 1e-9);
+  assert.ok(Math.abs(s.capacity - 120) < 1e-9);
+  assert.equal(Math.round(s.fullLifeMin), 180);
+});
+
+test('charge counter reset mid-session is ignored, 115 min reads 1 h 55', async () => {
+  const { sessionSummary } = await import('./battery.js');
+  const samples = [
+    { t: 0, pct: 90, mah: -10 },
+    { t: MIN, pct: 89, mah: -11 },
+    { t: 2 * MIN, pct: 89, mah: -0.2 }, // stick rebooted
+    { t: 3 * MIN, pct: 88, mah: -1.2 },
+  ];
+  assert.ok(Math.abs(sessionSummary({ samples }).usedMah - 2) < 1e-9);
+  assert.equal(formatMinutes(118), '2 h');
+  assert.equal(formatMinutes(115), '1 h 55 min');
+});

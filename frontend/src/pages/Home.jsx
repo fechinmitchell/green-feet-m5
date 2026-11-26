@@ -42,7 +42,7 @@ export default function Home() {
       </ol>
 
       {weakest && (
-        <div className={`card row-between battery-card ${weakest[1].minutes < 60 ? 'warn' : ''}`}>
+        <Link to="/battery" className={`card row-between battery-card ${weakest[1].minutes < 60 ? 'warn' : ''}`}>
           <span>
             <b>Battery: ≈ {formatMinutes(weakest[1].minutes)}</b>
             <small> · about {Math.max(0, Math.floor(weakest[1].minutes / MIN_PER_HOLE))} holes</small>
@@ -50,7 +50,7 @@ export default function Home() {
           <span className="mono">
             {running.length > 1 ? `${weakest[0] === 'L' ? 'left' : 'right'} stick runs out first` : `${weakest[0] === 'L' ? 'left' : 'right'} stick`}
           </span>
-        </div>
+        </Link>
       )}
 
       <Link to="/putt" className={`btn primary big ${ready ? '' : 'disabled'}`} aria-disabled={!ready}>

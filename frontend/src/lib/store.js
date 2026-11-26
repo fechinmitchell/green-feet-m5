@@ -8,6 +8,8 @@ const defaults = {
   calibration: {}, // { L: {u,f,r,at}, R: {...} }
   putts: [],
   batteryRates: {}, // stick id -> measured drain, % per minute
+  batteryCapacity: {}, // stick id -> measured capacity in mAh
+  batteryLog: {}, // stick id -> [{ id, side, fw, samples: [{t, pct, v, ma, mah}] }], newest last
 };
 
 function read() {
@@ -53,6 +55,27 @@ export const store = {
   },
   setBatteryRate(id, rate) {
     state = { ...state, batteryRates: { ...state.batteryRates, [id]: rate } };
+    write();
+  },
+  /** Add a battery sample; starts a new session after a gap, a charge, or on request. */
+  logBattery(stickId, meta, sample, { newSession = false } = {}) {
+    const sessions = [...(state.batteryLog[stickId] || [])];
+    const last = sessions[sessions.length - 1];
+    const lastT = last?.samples[last.samples.length - 1]?.t ?? 0;
+    if (newSession || !last || sample.t - lastT > 10 * 60000 || last.fw !== meta.fw) {
+      sessions.push({ id: sample.t, side: meta.side, fw: meta.fw, samples: [sample] });
+    } else {
+      sessions[sessions.length - 1] = { ...last, side: meta.side, samples: [...last.samples, sample].slice(-600) };
+    }
+    state = { ...state, batteryLog: { ...state.batteryLog, [stickId]: sessions.slice(-10) } };
+    write();
+  },
+  setBatteryCapacity(id, mah) {
+    state = { ...state, batteryCapacity: { ...state.batteryCapacity, [id]: mah } };
+    write();
+  },
+  clearBatteryLog() {
+    state = { ...state, batteryLog: {} };
     write();
   },
   clearPutts() {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { hub } from './ble/hub.js';
 import { store } from './lib/store.js';
 import { footSlope } from './lib/slope.js';
-import { estimate } from './lib/battery.js';
+import { estimate, avgDraw, sessionSummary } from './lib/battery.js';
 
 export function useHub() {
   useSyncExternalStore(
@@ -45,7 +45,7 @@ export function useLiveSlope(calibration) {
 /** Battery time-left estimate per connected stick, refreshed each minute. */
 export function useBatteryEstimates() {
   const hub = useHub();
-  const { batteryRates } = useStore();
+  const { batteryRates, batteryCapacity } = useStore();
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60000);
@@ -53,7 +53,15 @@ export function useBatteryEstimates() {
   }, []);
   const out = {};
   for (const s of hub.connected) {
-    const e = estimate({ pct: s.battery, charging: s.charging, fw: s.fw, history: s.battHistory, learnedRate: batteryRates[s.id] });
+    const e = estimate({
+      pct: s.battery,
+      charging: s.charging,
+      fw: s.fw,
+      history: s.battHistory,
+      learnedRate: batteryRates[s.id],
+      drawMa: avgDraw(s.powerHistory),
+      capacityMah: batteryCapacity[s.id],
+    });
     if (e) out[s.side] = e;
     // Remember a measured rate so tomorrow's estimate starts closer.
     if (e?.source === 'measured' && Math.abs((batteryRates[s.id] ?? 0) - e.rate) > 0.05 && s.kind === 'real') {
@@ -61,4 +69,45 @@ export function useBatteryEstimates() {
     }
   }
   return out;
+}
+
+/**
+ * Logs a battery sample for each connected stick once a minute, app-wide, so
+ * the Battery page has a history even if you never open it during a round.
+ */
+export function useBatteryLogger() {
+  useEffect(() => {
+    const charged = new Set();
+    const sample = () => {
+      for (const s of hub.connected) {
+        if (s.battery == null) continue;
+        if (s.charging) {
+          charged.add(s.id); // next sample after charging starts a fresh session
+          continue;
+        }
+        const p = s.power && Date.now() - s.power.at < 30000 ? s.power : null;
+        store.logBattery(
+          s.id,
+          { side: s.side, fw: s.fw },
+          { t: Date.now(), pct: s.battery, v: p ? round(p.v, 3) : undefined, ma: p ? round(p.ma, 1) : undefined, mah: p ? round(p.mah, 2) : undefined },
+          { newSession: charged.delete(s.id) }
+        );
+        // Learn this stick's real capacity once it has used 30%+ in one session.
+        const sessions = store.get().batteryLog[s.id];
+        const sum = sessions && sessionSummary(sessions[sessions.length - 1]);
+        if (sum?.capacity && s.kind === 'real') store.setBatteryCapacity(s.id, Math.round(sum.capacity));
+      }
+    };
+    const first = setTimeout(sample, 5000);
+    const id = setInterval(sample, 60000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
+}
+
+function round(x, d) {
+  const k = 10 ** d;
+  return Math.round(x * k) / k;
 }

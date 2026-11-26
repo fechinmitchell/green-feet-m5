@@ -2,7 +2,7 @@
 // simple interface: who's connected, live tilt, button presses, and a
 // "hold still and measure" capture.
 
-import { SERVICE, TILT, EVENT, CMD, INFO, NAME_PREFIX, parseTilt, parseInfo, dispCommand } from './protocol.js';
+import { SERVICE, TILT, EVENT, CMD, INFO, BATT, NAME_PREFIX, parseTilt, parseInfo, parseBatt, dispCommand } from './protocol.js';
 import { randomMount, sensorUp, noisy } from '../lib/sim.js';
 import { vec } from '../lib/slope.js';
 
@@ -19,6 +19,13 @@ class Emitter {
   emit(evt, ...args) {
     this.handlers[evt]?.forEach((fn) => fn(...args));
   }
+}
+
+// Live battery monitor reading: volts, mA, charge counter.
+function setPower(p) {
+  this.power = { ...p, at: Date.now() };
+  this.powerHistory = [...(this.powerHistory || []), this.power].slice(-200); // ~16 min at 5 s
+  this.emit('power', this.power);
 }
 
 // Battery readings over time, for the "time left" estimate.
@@ -48,6 +55,9 @@ class RealStick extends Emitter {
 
   recordBattery() {
     recordBattery.call(this);
+  }
+  setPower(p) {
+    setPower.call(this, p);
   }
 
   async connect() {
@@ -80,6 +90,15 @@ class RealStick extends Emitter {
       this.emit('button', text.charAt(0));
     });
     await evt.startNotifications();
+
+    // Battery monitor (firmware 1.3.0+). Older sticks just don't have it.
+    try {
+      const batt = await svc.getCharacteristic(BATT);
+      batt.addEventListener('characteristicvaluechanged', (e) => this.setPower(parseBatt(e.target.value)));
+      await batt.startNotifications();
+    } catch {
+      this.power = null;
+    }
 
     this.connected = true;
     this.emit('change');
@@ -150,7 +169,16 @@ class DemoStick extends Emitter {
   recordBattery() {
     recordBattery.call(this);
   }
+  setPower(p) {
+    setPower.call(this, p);
+  }
   tick() {
+    // Fake battery monitor every 5 s: ~45 mA draw, charge counter going down.
+    if (this.ticks % 100 === 0) {
+      const ma = -(42 + Math.random() * 8);
+      this.mah = (this.mah || 0) + (ma * 5) / 3600;
+      this.setPower({ v: 3.4 + (this.battery / 100) * 0.75, ma, mah: this.mah, pct: this.battery, charging: false });
+    }
     // Drain about 1% every 108 s, like a real stick on power-saving firmware.
     if (++this.ticks % 2160 === 0 && this.battery > 0) {
       this.battery--;

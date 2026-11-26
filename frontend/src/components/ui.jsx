@@ -1,10 +1,11 @@
 import { Link, NavLink } from 'react-router-dom';
-import { useHub, useBatteryEstimates } from '../hooks.js';
+import { useHub, useBatteryEstimates, useBatteryLogger } from '../hooks.js';
 import { formatMinutes } from '../lib/battery.js';
 
 export function Layout({ children }) {
   const hub = useHub();
   const est = useBatteryEstimates();
+  useBatteryLogger();
   const low = hub.connected.filter((s) => s.battery != null && !s.charging && (s.battery < 15 || (est[s.side]?.minutes ?? 999) < 30));
   const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real');
   return (
@@ -18,7 +19,7 @@ export function Layout({ children }) {
           {['L', 'R'].map((side) => {
             const s = hub.bySide(side);
             return (
-              <Link to="/connect" key={side} className={`pill ${s ? 'on' : ''}`} aria-label={`${side === 'L' ? 'Left' : 'Right'} stick: ${s ? `${s.battery ?? '?'}% battery${s.charging ? ', charging' : ''}` : 'not connected'}`}>
+              <Link to={s ? '/battery' : '/connect'} key={side} className={`pill ${s ? 'on' : ''}`} aria-label={`${side === 'L' ? 'Left' : 'Right'} stick: ${s ? `${s.battery ?? '?'}% battery${s.charging ? ', charging' : ''}` : 'not connected'}`}>
                 <b>{side}</b>
                 {s ? <Battery pct={s.battery} charging={s.charging} /> : <small>off</small>}
               </Link>
@@ -33,9 +34,9 @@ export function Layout({ children }) {
         </Link>
       ))}
       {low.map((s) => (
-        <div key={s.id} className="alert-banner">
+        <Link to="/battery" key={s.id} className="alert-banner">
           {s.side === 'L' ? 'Left' : 'Right'} stick battery low: {s.battery}%, about {formatMinutes(est[s.side]?.minutes)} left. Charge it with USB-C.
-        </div>
+        </Link>
       ))}
       <main className="page">{children}</main>
       <nav className="tabs">

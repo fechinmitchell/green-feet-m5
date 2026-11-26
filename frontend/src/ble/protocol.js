@@ -4,6 +4,7 @@ export const TILT = '6a4e0002-6f1d-4b8e-9f33-6f72e3f2a7c1';
 export const EVENT = '6a4e0003-6f1d-4b8e-9f33-6f72e3f2a7c1';
 export const CMD = '6a4e0004-6f1d-4b8e-9f33-6f72e3f2a7c1';
 export const INFO = '6a4e0005-6f1d-4b8e-9f33-6f72e3f2a7c1';
+export const BATT = '6a4e0006-6f1d-4b8e-9f33-6f72e3f2a7c1'; // firmware 1.3.0+
 export const NAME_PREFIX = 'GreenFeet';
 
 /** 20-byte tilt packet -> { up: [x,y,z], motion, battery, charging, seq } */
@@ -15,6 +16,18 @@ export function parseTilt(dataView) {
     battery: dataView.getUint8(16),
     charging: (dataView.getUint8(17) & 2) !== 0,
     seq: dataView.getUint16(18, le),
+  };
+}
+
+/** 16-byte battery packet -> { v, ma (negative = draining), mah (charge counter), pct, charging } */
+export function parseBatt(dataView) {
+  const le = true;
+  return {
+    v: dataView.getFloat32(0, le),
+    ma: dataView.getFloat32(4, le),
+    mah: dataView.getFloat32(8, le),
+    pct: dataView.getUint8(12),
+    charging: (dataView.getUint8(13) & 2) !== 0,
   };
 }
 

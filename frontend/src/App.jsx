@@ -7,6 +7,7 @@ import Putt from './pages/Putt.jsx';
 import Progress from './pages/Progress.jsx';
 import Settings from './pages/Settings.jsx';
 import Admin from './pages/admin/Admin.jsx';
+import BatteryPage from './pages/BatteryPage.jsx';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/progress" element={<Progress />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/battery" element={<BatteryPage />} />
         <Route path="*" element={<Home />} />
       </Routes>
     </Layout>
