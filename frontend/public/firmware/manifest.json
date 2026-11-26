@@ -1,8 +1,8 @@
 {
   "name": "Green Feet stick",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "new_install_prompt_erase": true,
   "builds": [
-    { "chipFamily": "ESP32", "parts": [{ "path": "green-feet-1.4.0.bin", "offset": 0 }] }
+    { "chipFamily": "ESP32", "parts": [{ "path": "green-feet-1.5.0.bin", "offset": 0 }] }
   ]
 }
