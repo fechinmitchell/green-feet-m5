@@ -178,6 +178,11 @@ void drawScreen() {
   lcd.setTextColor(charging ? CYAN : bp < 15 ? RED : bp < 35 ? YELLOW : WHITE, BLACK);
   lcd.drawString(String(charging ? "+" : "") + String(bp) + "%", 108, 16);
 
+  // Firmware version, small at the bottom of every screen.
+  lcd.setTextColor(DARKGREY, BLACK);
+  lcd.setTextSize(1);
+  lcd.drawString(String("fw ") + FW_VERSION, 67, 229);
+
   if (!connected) {
     lcd.setTextSize(2);
     lcd.setTextColor(GREEN, BLACK);
@@ -187,7 +192,7 @@ void drawScreen() {
     lcd.setTextColor(LIGHTGREY, BLACK);
     lcd.drawString("open the app", 67, 150);
     lcd.drawString("to connect", 67, 162);
-    lcd.drawString(String("id ") + devId, 67, 215);
+    lcd.drawString(String("id ") + devId, 67, 213);
     return;
   }
 
