@@ -348,7 +348,11 @@ export default function Putt() {
               <b>
                 {aim.fingers} finger{aim.fingers === 1 ? '' : 's'}
               </b>
-              {aim.highSide ? ` · stack them to the ${aim.highSide} (high side)` : ' · aim at the centre'}
+              {!aim.highSide || aim.fingers === 0
+                ? ' · aim at the centre of the hole'
+                : aim.fingers <= 1
+                  ? ` · held just ${aim.highSide} of the hole centre (the high side)`
+                  : ` · stacked to the ${aim.highSide} (the high side)`}
             </p>
             <p className="hint center">Arm straight, one eye closed. Put the edge of your first finger on the centre of the hole. Aim at the outer edge of the last finger. Roll it at dying speed.</p>
           </div>
@@ -501,6 +505,29 @@ function LiveRead({ live }) {
         <span>{a.hill === 'flat' ? 'flat along the line' : `${a.hill} ${fmt(Math.abs(along))}%`}</span>
         <span>low right</span>
       </div>
+      <div className="feet-live">
+        {['L', 'R'].map((side) => {
+          const f = live[side];
+          if (!f || f.cross == null) return null;
+          const fa = aimFromReadings([{ cross: f.cross, along: f.along }]);
+          const fpos = Math.max(-1, Math.min(1, -f.cross / 4));
+          return (
+            <div className="foot-row" key={side}>
+              <b>{side === 'L' ? 'Left' : 'Right'} foot</b>
+              <div className="tiltbar small" aria-hidden="true">
+                <span className="tb-mid" />
+                <span className="tb-dot" style={{ left: `${50 + fpos * 46}%` }} />
+              </div>
+              <span className="mono">
+                {fmt(fa.pct)}% {fa.breaks === 'straight' ? '' : fa.breaks === 'left' ? '←' : '→'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {feet.length === 2 && Math.abs(feet[0].cross - feet[1].cross) > 1.5 && (
+        <small className="hint">Your feet read quite differently. Check one isn’t on a ridge or in a dip.</small>
+      )}
     </div>
   );
 }

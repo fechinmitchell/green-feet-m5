@@ -117,32 +117,45 @@ export function Level({ label, data }) {
   );
 }
 
-/** Fingers held against the hole, stacked toward the high side. */
+/**
+ * Fingers held up at arm's length (AimPoint style): the edge of the first finger
+ * sits on the centre of the hole, the rest stack toward the high side, and you
+ * aim at the outer edge of the last finger.
+ */
 export function Fingers({ count, highSide }) {
   const n = Math.max(0, Math.min(6, count));
   const whole = Math.floor(n);
   const half = n - whole >= 0.5;
   const w = 16, gap = 2;
-  const holeX = 110;
+  const holeX = 120;
   const dir = highSide === 'left' ? -1 : 1;
   const fingers = [];
+  let outer = holeX; // outer edge of the last finger
   for (let i = 0; i < whole + (half ? 1 : 0); i++) {
     const isHalf = half && i === whole;
     const fw = isHalf ? w / 2 : w;
     const x = dir > 0 ? holeX + i * (w + gap) : holeX - i * (w + gap) - fw;
-    fingers.push(<rect key={i} x={x} y="14" width={fw} height="66" rx={isHalf ? 3 : 7} className="finger" />);
+    outer = dir > 0 ? x + fw : x;
+    fingers.push(<rect key={i} x={x} y="22" width={fw} height="62" rx={isHalf ? 3 : 7} className="finger" />);
   }
-  const span = whole * (w + gap) + (half ? w / 2 : 0);
-  const aimX = n === 0 ? holeX : dir > 0 ? holeX + span : holeX - span;
+  const aimX = n === 0 ? holeX : outer;
   return (
-    <svg viewBox="0 0 220 110" className="fingers" role="img" aria-label={`${count} fingers, aim at the ${highSide || 'centre'} edge`}>
-      <ellipse cx={holeX} cy="92" rx="14" ry="5" className="hole" />
-      <line x1={holeX} y1="84" x2={holeX} y2="100" className="hole-c" />
-      {fingers}
-      <line x1={aimX} y1="2" x2={aimX} y2="104" className="aim" />
-      <text x={aimX + (dir > 0 ? 4 : -4)} y="10" textAnchor={dir > 0 ? 'start' : 'end'} className="aim-t">
-        aim here
+    <svg viewBox="0 0 240 132" className="fingers" role="img" aria-label={n ? `${count} fingers: first finger edge on the hole centre, stacked to the ${highSide}, aim at the outer edge` : 'Aim at the centre of the hole'}>
+      {/* the cup, seen beyond your fingers */}
+      <ellipse cx={holeX} cy="104" rx="18" ry="5.5" className="hole" />
+      <line x1={holeX} y1="14" x2={holeX} y2="112" className="hole-c" />
+      <text x={holeX} y="126" textAnchor="middle" className="cap-t">
+        hole centre
       </text>
+      {fingers}
+      {n > 0 && (
+        <>
+          <line x1={aimX} y1="12" x2={aimX} y2="112" className="aim" />
+          <text x={aimX + (dir > 0 ? 4 : -4)} y="10" textAnchor={dir > 0 ? 'start' : 'end'} className="aim-t">
+            aim here
+          </text>
+        </>
+      )}
     </svg>
   );
 }

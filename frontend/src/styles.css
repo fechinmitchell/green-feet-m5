@@ -166,7 +166,8 @@ details.card summary { cursor: pointer; }
 .fingers { width: 100%; max-width: 320px; margin: 0 auto; }
 .finger { fill: var(--green-soft); stroke: var(--ink); stroke-width: 2; }
 .hole { fill: var(--ink); }
-.hole-c { stroke: var(--card); stroke-width: 1.5; }
+.hole-c { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.cap-t { fill: var(--muted); font: 600 9px var(--font); }
 .aim { stroke: var(--flag); stroke-width: 2; stroke-dasharray: 4 3; }
 .aim-t { fill: var(--flag); font: 700 10px var(--font); }
 
@@ -248,3 +249,8 @@ input[type='range'] { width: 100%; accent-color: var(--green-2); height: 32px; }
 .tb-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--muted); }
 .tb-dot { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--green-2); border: 2px solid var(--card); transition: left .15s; }
 .toggle.bare { border: none; padding: 0; }
+.feet-live { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+.foot-row { display: grid; grid-template-columns: 80px 1fr 64px; align-items: center; gap: 10px; font-size: .9rem; }
+.foot-row .mono { text-align: right; font-variant-numeric: tabular-nums; }
+.tiltbar.small { height: 8px; }
+.tiltbar.small .tb-dot { width: 12px; height: 12px; margin: -6px 0 0 -6px; }
