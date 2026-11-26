@@ -408,7 +408,7 @@ void initBle() {
 
   String name = String("GreenFeet-") + devId;
   NimBLEDevice::init(name.c_str());
-  NimBLEDevice::setPower(ESP_PWR_LVL_N0);  // 0 dBm: plenty for shoe-to-pocket, saves power
+  NimBLEDevice::setPower(ESP_PWR_LVL_P7);  // +7 dBm: your body sits between shoe and phone, keep the link strong
   NimBLEServer *server = NimBLEDevice::createServer();
   server->setCallbacks(new ServerCB());
   NimBLEService *svc = server->createService(SERVICE_UUID);

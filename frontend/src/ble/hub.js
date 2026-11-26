@@ -37,7 +37,17 @@ function recordBattery() {
   this.battHistory = [...(this.battHistory || []), { t: Date.now(), pct: this.battery }].slice(-300);
 }
 
+// Recent connection events, shown on the Admin page to help troubleshoot.
+export const connLog = [];
+function logConn(stick, text) {
+  connLog.unshift({ t: Date.now(), stick: stick.side !== '?' ? stick.side : stick.id, text });
+  connLog.length = Math.min(connLog.length, 60);
+}
+
 class RealStick extends Emitter {
+  log(text) {
+    logConn(this, text);
+  }
   constructor(device) {
     super();
     this.kind = 'real';
@@ -62,18 +72,22 @@ class RealStick extends Emitter {
 
   async connect() {
     // A napping stick only listens for ~1.5 s at a time, so don't wait forever.
+    // The timer is cancelled as soon as the connection is made: it must never
+    // be able to hang up a good connection.
+    let timer;
     const server = await Promise.race([
-      this.device.gatt.connect(),
-      new Promise((_, reject) =>
-        setTimeout(() => {
+      this.device.gatt.connect().finally(() => clearTimeout(timer)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          this.log('connect timed out');
           try {
             this.device.gatt.disconnect();
           } catch {
             /* ignore */
           }
           reject(new Error('timeout'));
-        }, 8000)
-      ),
+        }, 8000);
+      }),
     ]);
     const svc = await server.getPrimaryService(SERVICE);
     this.cmdChr = await svc.getCharacteristic(CMD);
@@ -123,6 +137,7 @@ class RealStick extends Emitter {
     }
 
     this.connected = true;
+    this.log(this.napping ? 'connected (woke from nap)' : 'connected');
     this.napping = false;
     this.asleep = false;
     this.emit('connected');
@@ -130,6 +145,7 @@ class RealStick extends Emitter {
   }
 
   async onDrop() {
+    this.log(this.napping ? 'napping' : this.asleep ? 'switched off' : 'connection dropped');
     this.connected = false;
     this.emit('change');
     // A napping stick is fine: it comes back when the app needs it.
@@ -176,6 +192,7 @@ class RealStick extends Emitter {
   }
 
   nap() {
+    this.log('sent to nap');
     this.napping = true;
     this.emit('change');
     return this.send('nap');
@@ -264,6 +281,18 @@ export class Hub extends Emitter {
    * want() and the returned release() when done. With nobody wanting them, the
    * sticks are sent to nap after a short grace period.
    */
+  /** Settings: "let sticks nap between putts" switched off. */
+  setKeepAwake(on) {
+    if (on === !!this.keepAwake) return;
+    this.keepAwake = on;
+    if (on) {
+      this.release = this.want();
+    } else {
+      this.release?.();
+      this.release = null;
+    }
+  }
+
   want() {
     this.wanted++;
     clearTimeout(this.napTimer);
@@ -280,7 +309,7 @@ export class Hub extends Emitter {
   scheduleNap(ms) {
     clearTimeout(this.napTimer);
     this.napTimer = setTimeout(() => {
-      if (this.wanted) return;
+      if (this.wanted || this.keepAwake) return;
       this.connected.forEach((s) => s.kind === 'real' && s.nap());
     }, ms);
   }
@@ -317,7 +346,7 @@ export class Hub extends Emitter {
       // Back from a nap: show what the phone is showing, and nap again later
       // if nothing needs it (e.g. woken by a press of A).
       if (this.lastDisp) stick.send(this.lastDisp);
-      if (!this.wanted) this.scheduleNap(60000);
+      if (!this.wanted && !this.keepAwake) this.scheduleNap(60000);
     });
     stick.on('button', (b) => this.emit('button', b, stick));
     this.sticks.push(stick);

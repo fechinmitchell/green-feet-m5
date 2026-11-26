@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useHub, useStore } from '../../hooks.js';
 import { store } from '../../lib/store.js';
+import { connLog } from '../../ble/hub.js';
 
 // Programs the M5Sticks straight from the browser over USB (Web Serial).
 // Works in Chrome or Edge on a computer. The firmware file is built by GitHub
@@ -71,6 +72,22 @@ export default function Admin() {
             Try a different USB-C cable (some only charge). If Chrome still doesn’t list a port, install the USB driver for the stick’s chip from M5Stack’s download page (docs.m5stack.com → Download → “CH9102 driver” for macOS), then restart Chrome.
           </p>
         </details>
+      </section>
+
+      <section className="card">
+        <h2>Connection log</h2>
+        <p className="hint">Latest first. Useful if sticks keep dropping. Send me a screenshot.</p>
+        {connLog.length ? (
+          <ul className="list mono">
+            {connLog.slice(0, 30).map((e, i) => (
+              <li key={i}>
+                {new Date(e.t).toLocaleTimeString()} · {e.stick} · {e.text}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="hint">Nothing yet in this session.</p>
+        )}
       </section>
 
       <section className="card">

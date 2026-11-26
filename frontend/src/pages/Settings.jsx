@@ -35,6 +35,14 @@ export default function Settings() {
         <small className="hint">Learn asks for your guess before showing the reading, so your feet get trained.</small>
       </div>
 
+      <label className="toggle" htmlFor="nap">
+        <input id="nap" type="checkbox" checked={settings.napBetween} onChange={(e) => store.setSettings({ napBetween: e.target.checked })} />
+        <span>
+          <b>Let sticks nap between putts</b>
+          <small>Saves a lot of battery. The sticks wake by themselves when you start a putt (up to 15 s), or press A. Switch off to keep them connected all the time (about 2 hours of battery).</small>
+        </span>
+      </label>
+
       <details className="card">
         <summary>
           <b>Fine-tuning</b>

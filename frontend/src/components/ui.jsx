@@ -1,11 +1,14 @@
 import { Link, NavLink } from 'react-router-dom';
-import { useHub, useBatteryEstimates, useBatteryLogger } from '../hooks.js';
+import { useEffect } from 'react';
+import { useHub, useBatteryEstimates, useBatteryLogger, useStore } from '../hooks.js';
 import { formatMinutes } from '../lib/battery.js';
 
 export function Layout({ children }) {
   const hub = useHub();
   const est = useBatteryEstimates();
   useBatteryLogger();
+  const { settings } = useStore();
+  useEffect(() => hub.setKeepAwake(!settings.napBetween), [hub, settings.napBetween]);
   const low = hub.connected.filter((s) => s.battery != null && !s.charging && (s.battery < 15 || (est[s.side]?.minutes ?? 999) < 30));
   const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real' && !s.asleep && !s.napping);
   const asleep = hub.sticks.filter((s) => !s.connected && s.kind === 'real' && s.asleep);

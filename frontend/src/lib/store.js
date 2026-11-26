@@ -4,7 +4,7 @@
 const KEY = 'greenfeet.v1';
 
 const defaults = {
-  settings: { speed: 'medium', mode: 'learn', holeWeight: 2 / 3, fingerScale: 1 },
+  settings: { speed: 'medium', mode: 'learn', holeWeight: 2 / 3, fingerScale: 1, napBetween: true },
   calibration: {}, // { L: {u,f,r,at}, R: {...} }
   putts: [],
   batteryRates: {}, // stick id -> measured drain, % per minute
