@@ -48,10 +48,30 @@ volatile bool wakeRequested = false;
 void wakeScreen() {
   screenOnUntil = millis() + SCREEN_MS;
   if (!screenOn) {
+    M5.Lcd.writecommand(0x11);  // ST7789 sleep out
+    delay(10);
     M5.Axp.SetLDO2(true);  // LDO2 powers the LCD backlight
     screenOn = true;
+    screenDirty = true;
   }
 }
+
+void sleepScreen() {
+  M5.Axp.SetLDO2(false);
+  M5.Lcd.writecommand(0x10);  // ST7789 sleep in: the display chip itself stops too
+  screenOn = false;
+}
+
+// Streaming speed. Sampling stays at 100 Hz with the same smoothing either way,
+// so readings are exactly as accurate; only how often we send to the phone
+// changes. The phone asks for fast mode while you're measuring or calibrating.
+const uint32_t SLOW_MS = 250;  // 4 Hz
+const uint32_t FAST_MS = 50;   // 20 Hz
+uint32_t fastUntil = 0;
+
+// Auto power-off when no phone has been connected for a while.
+const uint32_t IDLE_OFF_MS = 10UL * 60UL * 1000UL;
+uint32_t lastConnectedAt = 0;
 volatile bool pendingCmd = false;
 String cmdBuf;
 
@@ -165,6 +185,10 @@ void handleCommand(const String &cmd) {
     beep(f > 0 ? f : 3000, ms > 0 ? ms : 120);
   } else if (cmd.startsWith("led:")) {
     digitalWrite(LED_PIN, cmd.charAt(4) == '1' ? LOW : HIGH);
+  } else if (cmd.startsWith("rate:")) {
+    // "rate:fast" lasts 30 s unless renewed, so a dropped phone can't leave it fast
+    fastUntil = cmd.substring(5) == "fast" ? millis() + 30000 : 0;
+    return;  // don't wake the screen for this
   }
   screenDirty = true;
   wakeScreen();
@@ -175,7 +199,11 @@ class ServerCB : public NimBLEServerCallbacks {
     connected = true;
     screenDirty = true;
     wakeRequested = true;
-    // Allow a second phone/app connection slot? No: one phone at a time.
+  }
+  void onConnect(NimBLEServer *s, ble_gap_conn_desc *desc) override {
+    // 30-50 ms interval, may skip up to 4 events when there's nothing to send.
+    // Button presses still go out at the next event, so they feel instant.
+    s->updateConnParams(desc->conn_handle, 24, 40, 4, 400);
   }
   void onDisconnect(NimBLEServer *s) override {
     connected = false;
@@ -220,14 +248,14 @@ void sendTilt() {
 // 16-byte battery packet, little endian:
 //   float32 volts   float32 mA (negative = draining)
 //   float32 coulomb counter in mAh since power-on (negative = used)
-//   uint8 battery %   uint8 flags (bit1 = charging)   uint16 sequence
+//   uint8 battery %   uint8 flags (bit1 = charging, bit2 = screen on, bit3 = fast stream)   uint16 sequence
 void sendBatt() {
   static uint16_t seq = 0;
   uint8_t buf[16];
   float vals[3] = {battV, battMa, M5.Axp.GetCoulombData()};
   memcpy(buf, vals, 12);
   buf[12] = (uint8_t)batteryPct();
-  buf[13] = charging ? 2 : 0;
+  buf[13] = (charging ? 2 : 0) | (screenOn ? 4 : 0) | (millis() < fastUntil ? 8 : 0);
   seq++;
   memcpy(buf + 14, &seq, 2);
   battChr->setValue(buf, sizeof(buf));
@@ -238,6 +266,12 @@ void setup() {
   M5.begin(true, true, false);
   setCpuFrequencyMhz(80);  // plenty for sensing + Bluetooth, uses much less power than 240
   M5.Imu.Init();
+  // We only use the accelerometer. Switch the gyro off (MPU6886 PWR_MGMT_2,
+  // bits 0-2 = gyro z/y/x standby) to save a few mA.
+  Wire1.beginTransmission(0x68);
+  Wire1.write(0x6C);
+  Wire1.write(0x07);
+  Wire1.endTransmission();
   M5.Lcd.setRotation(0);  // portrait, 135 x 240
   M5.Axp.EnableCoulombcounter();  // counts mAh in and out of the battery
   pinMode(LED_PIN, OUTPUT);
@@ -299,7 +333,8 @@ void loop() {
     motion += 0.03f * (dev - motion);
   }
 
-  if (connected && now - lastSend >= 50) {  // 20 Hz to the phone
+  uint32_t period = (int32_t)(fastUntil - now) > 0 ? FAST_MS : SLOW_MS;
+  if (connected && now - lastSend >= period) {
     lastSend = now;
     sendTilt();
   }
@@ -311,9 +346,22 @@ void loop() {
   if (M5.BtnA.wasPressed()) { sendEvent('A'); beep(3200, 40); wakeScreen(); }
   if (M5.BtnB.wasPressed()) { sendEvent('B'); beep(1800, 40); wakeScreen(); }
   if (wakeRequested) { wakeRequested = false; wakeScreen(); }
-  if (screenOn && !charging && (int32_t)(now - screenOnUntil) > 0) {
-    M5.Axp.SetLDO2(false);
-    screenOn = false;
+  if (screenOn && !charging && (int32_t)(now - screenOnUntil) > 0) sleepScreen();
+
+  if (connected || charging) lastConnectedAt = now;
+  if (now - lastConnectedAt > IDLE_OFF_MS) {
+    wakeScreen();
+    dTitle = "";
+    M5.Lcd.fillScreen(BLACK);
+    M5.Lcd.setTextDatum(MC_DATUM);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setTextColor(WHITE, BLACK);
+    M5.Lcd.drawString("OFF", 67, 110);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.drawString("no app for 10 min", 67, 140);
+    beep(1200, 200);
+    delay(1500);
+    M5.Axp.PowerOff();  // press the power button to turn back on
   }
 
   if (pendingCmd) {
@@ -330,7 +378,7 @@ void loop() {
   }
 
   // Refresh the battery figure now and then, redraw when something changed.
-  if (screenDirty || now - lastScreen > 30000) {
+  if (screenOn && (screenDirty || now - lastScreen > 30000)) {
     screenDirty = false;
     lastScreen = now;
     drawScreen();
