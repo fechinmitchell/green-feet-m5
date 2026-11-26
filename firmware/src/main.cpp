@@ -9,6 +9,7 @@
 #include <M5StickCPlus.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
+#include <esp_sleep.h>
 
 #ifndef FW_VERSION
 #define FW_VERSION "dev"
@@ -262,7 +263,75 @@ void sendBatt() {
   battChr->notify();
 }
 
+// ---- Off / on with button A ----
+// Hold A for 2 s: the stick goes into deep sleep (almost no power).
+// Hold A for 1 s to wake it. After 2 h asleep it powers fully off; then only
+// the power button on the side turns it on (A has no power when fully off).
+const gpio_num_t BTN_A_PIN = GPIO_NUM_37;
+const uint64_t SLEEP_TO_OFF_US = 2ULL * 60 * 60 * 1000000;
+
+void sleepNow(const char *why) {
+  if (connected) {
+    // Tell the app this was on purpose, so it says "off" rather than "lost".
+    eventChr->setValue((uint8_t *)"S:0", 3);
+    eventChr->notify();
+    delay(150);
+  }
+  wakeScreen();
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setTextDatum(MC_DATUM);
+  M5.Lcd.setTextColor(WHITE, BLACK);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.drawString("OFF", 67, 100);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.drawString(why, 67, 130);
+  M5.Lcd.drawString("hold A to turn on", 67, 150);
+  M5.Beep.tone(1400);
+  delay(120);
+  M5.Beep.tone(900);
+  delay(160);
+  M5.Beep.mute();
+  delay(1200);
+
+  // Quiet everything we can before sleeping.
+  Wire1.beginTransmission(0x68);  // MPU6886 PWR_MGMT_1: sleep
+  Wire1.write(0x6B);
+  Wire1.write(0x40);
+  Wire1.endTransmission();
+  sleepScreen();
+  digitalWrite(LED_PIN, HIGH);
+
+  while (digitalRead(BTN_A_PIN) == LOW) delay(10);  // wait for A to be let go
+  esp_sleep_enable_ext0_wakeup(BTN_A_PIN, 0);       // A pulls the pin low
+  esp_sleep_enable_timer_wakeup(SLEEP_TO_OFF_US);
+  esp_deep_sleep_start();
+}
+
+// Runs first on every boot. Woken by a brief knock in a bag? Go back to sleep
+// unless A is held for a full second. Asleep for 2 h? Power fully off.
+void checkWake() {
+  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  if (cause == ESP_SLEEP_WAKEUP_TIMER) {
+    M5.Axp.begin();
+    M5.Axp.PowerOff();
+  }
+  if (cause == ESP_SLEEP_WAKEUP_EXT0) {
+    pinMode(BTN_A_PIN, INPUT);
+    uint32_t start = millis();
+    while (digitalRead(BTN_A_PIN) == LOW) {
+      if (millis() - start >= 1000) return;  // held long enough: turn on
+      delay(10);
+    }
+    esp_sleep_enable_ext0_wakeup(BTN_A_PIN, 0);
+    esp_sleep_enable_timer_wakeup(SLEEP_TO_OFF_US);
+    esp_deep_sleep_start();
+  }
+}
+
 void setup() {
+  checkWake();
+  pinMode(BTN_A_PIN, INPUT);
+  while (digitalRead(BTN_A_PIN) == LOW) delay(10);  // the wake hold must not count as a press
   M5.begin(true, true, false);
   setCpuFrequencyMhz(80);  // plenty for sensing + Bluetooth, uses much less power than 240
   M5.Imu.Init();
@@ -343,26 +412,36 @@ void loop() {
     sendBatt();
   }
 
-  if (M5.BtnA.wasPressed()) { sendEvent('A'); beep(3200, 40); wakeScreen(); }
+  // A: a short press is a reading (sent when you let go); holding 2 s turns off.
+  static uint32_t aDownAt = 0;
+  static bool aHoldShown = false;
+  if (M5.BtnA.wasPressed()) { aDownAt = now; aHoldShown = false; wakeScreen(); }
+  if (M5.BtnA.isPressed() && aDownAt) {
+    uint32_t held = now - aDownAt;
+    if (held >= 700 && !aHoldShown) {  // past a normal press: show what holding does
+      aHoldShown = true;
+      M5.Lcd.fillScreen(BLACK);
+      M5.Lcd.setTextDatum(MC_DATUM);
+      M5.Lcd.setTextSize(2);
+      M5.Lcd.setTextColor(YELLOW, BLACK);
+      M5.Lcd.drawString("KEEP", 67, 100);
+      M5.Lcd.drawString("HOLDING", 67, 122);
+      M5.Lcd.setTextSize(1);
+      M5.Lcd.drawString("to turn off", 67, 150);
+    }
+    if (held >= 2000) sleepNow("held A");
+  }
+  if (M5.BtnA.wasReleased() && aDownAt) {
+    if (now - aDownAt < 700) { sendEvent('A'); beep(3200, 40); }
+    else screenDirty = true;  // let go early: put the normal screen back
+    aDownAt = 0;
+  }
   if (M5.BtnB.wasPressed()) { sendEvent('B'); beep(1800, 40); wakeScreen(); }
   if (wakeRequested) { wakeRequested = false; wakeScreen(); }
   if (screenOn && !charging && (int32_t)(now - screenOnUntil) > 0) sleepScreen();
 
   if (connected || charging) lastConnectedAt = now;
-  if (now - lastConnectedAt > IDLE_OFF_MS) {
-    wakeScreen();
-    dTitle = "";
-    M5.Lcd.fillScreen(BLACK);
-    M5.Lcd.setTextDatum(MC_DATUM);
-    M5.Lcd.setTextSize(2);
-    M5.Lcd.setTextColor(WHITE, BLACK);
-    M5.Lcd.drawString("OFF", 67, 110);
-    M5.Lcd.setTextSize(1);
-    M5.Lcd.drawString("no app for 10 min", 67, 140);
-    beep(1200, 200);
-    delay(1500);
-    M5.Axp.PowerOff();  // press the power button to turn back on
-  }
+  if (now - lastConnectedAt > IDLE_OFF_MS) sleepNow("no app for 10 min");
 
   if (pendingCmd) {
     pendingCmd = false;
