@@ -1,0 +1,58 @@
+# Builds the M5Stick firmware and puts it where the admin "Update sticks"
+# page can install it: frontend/public/firmware/
+name: Build stick firmware
+
+on:
+  push:
+    branches: [main]
+    paths: ['firmware/**', '.github/workflows/firmware.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install platformio esptool
+      - name: Compile
+        working-directory: firmware
+        run: pio run
+      - name: Merge into one file and write the manifest
+        run: |
+          set -e
+          VERSION=$(grep -oP 'FW_VERSION=\\"\K[^\\"]+' firmware/platformio.ini)
+          B=firmware/.pio/build/m5stick-c-plus
+          APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          OUT=frontend/public/firmware
+          mkdir -p $OUT
+          rm -f $OUT/green-feet-*.bin
+          esptool.py --chip esp32 merge_bin -o $OUT/green-feet-$VERSION.bin \
+            --flash_mode dio --flash_freq 40m --flash_size 4MB \
+            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 $APP0 0x10000 $B/firmware.bin
+          cat > $OUT/manifest.json <<JSON
+          {
+            "name": "Green Feet stick",
+            "version": "$VERSION",
+            "new_install_prompt_erase": true,
+            "builds": [
+              { "chipFamily": "ESP32", "parts": [{ "path": "green-feet-$VERSION.bin", "offset": 0 }] }
+            ]
+          }
+          JSON
+      - name: Commit the built firmware
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/firmware
+          git diff --cached --quiet || git commit -m "Build stick firmware" && git push

@@ -1,0 +1,4 @@
+{
+  "rewrites": [{ "source": "/((?!firmware/|assets/|icon).*)", "destination": "/index.html" }],
+  "headers": [{ "source": "/firmware/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }]
+}
