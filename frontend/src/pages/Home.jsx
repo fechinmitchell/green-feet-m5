@@ -14,11 +14,11 @@ export default function Home() {
   const today = putts.filter((p) => new Date(p.at).toDateString() === new Date().toDateString()).length;
 
   const steps = [
-    { done: connected === 2, to: '/connect', title: 'Connect sticks', text: connected ? `${connected} of 2 connected` : 'Pair your left and right sticks' },
+    { done: hub.sticks.length >= 2, to: '/connect', title: 'Connect sticks', text: hub.sticks.length ? `${connected} awake${hub.napping.length ? `, ${hub.napping.length} napping to save battery` : ''}` : 'Pair your left and right sticks' },
     { done: calibrated === 2, to: '/calibrate', title: 'Calibrate', text: calibrated ? `Done ${ago(Math.min(...['L', 'R'].filter((s) => calibration[s]).map((s) => calibration[s].at)))}` : 'Stand, lift toes, turn around' },
     { done: true, to: '/settings', title: 'Green speed', text: `${SPEEDS[settings.speed].label} (stimp ~${SPEEDS[settings.speed].stimp}) · ${settings.mode === 'learn' ? 'Learn mode' : 'Just read'}` },
   ];
-  const ready = connected > 0 && ['L', 'R'].some((s) => calibration[s] && hub.bySide(s));
+  const ready = ['L', 'R'].some((s) => calibration[s] && hub.known(s));
 
   return (
     <div className="stack">

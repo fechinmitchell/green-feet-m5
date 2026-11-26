@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useHub, useBatteryEstimates } from '../hooks.js';
+import { useHub, useBatteryEstimates, useSticksAwake } from '../hooks.js';
 import { formatMinutes } from '../lib/battery.js';
 import { Battery } from '../components/ui.jsx';
 
@@ -9,6 +9,7 @@ export default function Connect() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const est = useBatteryEstimates();
+  useSticksAwake(true);
 
   async function pair() {
     setError('');
@@ -44,7 +45,7 @@ export default function Connect() {
             <div>
               <b>{side === 'L' ? 'Left foot' : 'Right foot'}</b>
               <div className="mono">
-                {s ? `${s.kind === 'demo' ? 'demo' : 'id ' + s.id} · ${s.connected ? 'connected' : 'reconnecting…'}${s.fw && s.kind !== 'demo' ? ' · fw ' + s.fw : ''}` : 'not connected'}
+                {s ? `${s.kind === 'demo' ? 'demo' : 'id ' + s.id} · ${s.connected ? 'connected' : s.napping ? 'napping, waking…' : 'reconnecting…'}${s.fw && s.kind !== 'demo' ? ' · fw ' + s.fw : ''}` : 'not connected'}
               </div>
               {s?.connected && est[side] && <TimeLeft e={est[side]} />}
             </div>

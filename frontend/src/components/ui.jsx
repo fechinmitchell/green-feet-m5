@@ -7,7 +7,7 @@ export function Layout({ children }) {
   const est = useBatteryEstimates();
   useBatteryLogger();
   const low = hub.connected.filter((s) => s.battery != null && !s.charging && (s.battery < 15 || (est[s.side]?.minutes ?? 999) < 30));
-  const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real' && !s.asleep);
+  const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real' && !s.asleep && !s.napping);
   const asleep = hub.sticks.filter((s) => !s.connected && s.kind === 'real' && s.asleep);
   return (
     <div className="app">
@@ -22,7 +22,7 @@ export function Layout({ children }) {
             return (
               <Link to={s ? '/battery' : '/connect'} key={side} className={`pill ${s ? 'on' : ''}`} aria-label={`${side === 'L' ? 'Left' : 'Right'} stick: ${s ? `${s.battery ?? '?'}% battery${s.charging ? ', charging' : ''}` : 'not connected'}`}>
                 <b>{side}</b>
-                {s ? <Battery pct={s.battery} charging={s.charging} /> : <small>off</small>}
+                {s ? <Battery pct={s.battery} charging={s.charging} /> : hub.known(side)?.napping ? <small>napping</small> : <small>off</small>}
               </Link>
             );
           })}

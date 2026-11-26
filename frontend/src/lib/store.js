@@ -62,7 +62,7 @@ export const store = {
     const sessions = [...(state.batteryLog[stickId] || [])];
     const last = sessions[sessions.length - 1];
     const lastT = last?.samples[last.samples.length - 1]?.t ?? 0;
-    if (newSession || !last || sample.t - lastT > 10 * 60000 || last.fw !== meta.fw) {
+    if (newSession || !last || sample.t - lastT > 30 * 60000 || last.fw !== meta.fw) {
       sessions.push({ id: sample.t, side: meta.side, fw: meta.fw, samples: [sample] });
     } else {
       sessions[sessions.length - 1] = { ...last, side: meta.side, samples: [...last.samples, sample].slice(-600) };

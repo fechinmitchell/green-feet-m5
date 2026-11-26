@@ -15,6 +15,7 @@ export function parseTilt(dataView) {
     motion: dataView.getFloat32(12, le),
     battery: dataView.getUint8(16),
     charging: (dataView.getUint8(17) & 2) !== 0,
+    accurate: (dataView.getUint8(17) & 4) !== 0, // firmware 1.6.0+: % from the charge counter
     seq: dataView.getUint16(18, le),
   };
 }
@@ -30,6 +31,7 @@ export function parseBatt(dataView) {
     charging: (dataView.getUint8(13) & 2) !== 0,
     screenOn: (dataView.getUint8(13) & 4) !== 0, // firmware 1.4.0+
     fast: (dataView.getUint8(13) & 8) !== 0,
+    accurate: (dataView.getUint8(13) & 16) !== 0,
   };
 }
 

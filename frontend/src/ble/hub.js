@@ -61,7 +61,20 @@ class RealStick extends Emitter {
   }
 
   async connect() {
-    const server = await this.device.gatt.connect();
+    // A napping stick only listens for ~1.5 s at a time, so don't wait forever.
+    const server = await Promise.race([
+      this.device.gatt.connect(),
+      new Promise((_, reject) =>
+        setTimeout(() => {
+          try {
+            this.device.gatt.disconnect();
+          } catch {
+            /* ignore */
+          }
+          reject(new Error('timeout'));
+        }, 8000)
+      ),
+    ]);
     const svc = await server.getPrimaryService(SERVICE);
     this.cmdChr = await svc.getCharacteristic(CMD);
     const info = await svc.getCharacteristic(INFO);
@@ -73,9 +86,10 @@ class RealStick extends Emitter {
     // Handlers are created once and re-attached on reconnect, never doubled up.
     this.onTilt ||= (e) => {
       const t = parseTilt(e.target.value);
-      if (t.battery !== this.battery || t.charging !== this.charging) {
+      if (t.battery !== this.battery || t.charging !== this.charging || t.accurate !== this.accurate) {
         this.battery = t.battery;
         this.charging = t.charging;
+        this.accurate = t.accurate;
         this.recordBattery();
         this.emit('change'); // battery gauge in the header updates live
       }
@@ -109,26 +123,33 @@ class RealStick extends Emitter {
     }
 
     this.connected = true;
+    this.napping = false;
+    this.asleep = false;
+    this.emit('connected');
     this.emit('change');
   }
 
   async onDrop() {
     this.connected = false;
     this.emit('change');
-    // Walking around the green can drop the link for a moment, and a stick
-    // switched off with A can be woken again. Keep trying for 15 minutes.
-    if (this.reconnecting) return;
+    // A napping stick is fine: it comes back when the app needs it.
+    if (this.hub?.wanted) this.reconnect();
+  }
+
+  /**
+   * Keep trying to reach the stick while the app needs it. A napping stick
+   * listens for ~1.5 s every 15 s, so this usually connects within 15 s.
+   */
+  async reconnect() {
+    if (this.reconnecting || this.connected || this.closing) return;
     this.reconnecting = true;
-    const until = Date.now() + 15 * 60000;
-    for (let i = 0; Date.now() < until && !this.closing && !this.connected; i++) {
-      await new Promise((r) => setTimeout(r, Math.min(5000, 1000 + i * 1000)));
+    const until = Date.now() + 30 * 60000;
+    for (let i = 0; Date.now() < until && !this.closing && !this.connected && (this.hub?.wanted || this.asleep); i++) {
       try {
         await this.connect();
-        this.asleep = false;
-        this.emit('change');
         break;
       } catch {
-        /* keep trying */
+        await new Promise((r) => setTimeout(r, Math.min(1500, 300 + i * 300)));
       }
     }
     this.reconnecting = false;
@@ -152,6 +173,12 @@ class RealStick extends Emitter {
     this.side = side;
     this.emit('change');
     return this.send(`side:${side}`);
+  }
+
+  nap() {
+    this.napping = true;
+    this.emit('change');
+    return this.send('nap');
   }
 
   disconnect() {
@@ -215,6 +242,7 @@ class DemoStick extends Emitter {
   pressA() {
     this.emit('button', 'A');
   }
+  nap() {}
   disconnect() {
     clearInterval(this.timer);
     this.connected = false;
@@ -227,6 +255,34 @@ export class Hub extends Emitter {
     super();
     this.sticks = [];
     this.version = 0;
+    this.wanted = 0;
+    this.lastDisp = null;
+  }
+
+  /**
+   * Pages that need live sticks (pairing, calibrating, guessing/measuring) call
+   * want() and the returned release() when done. With nobody wanting them, the
+   * sticks are sent to nap after a short grace period.
+   */
+  want() {
+    this.wanted++;
+    clearTimeout(this.napTimer);
+    this.sticks.forEach((s) => s.kind === 'real' && !s.connected && s.reconnect());
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.wanted--;
+      if (!this.wanted) this.scheduleNap(20000);
+    };
+  }
+
+  scheduleNap(ms) {
+    clearTimeout(this.napTimer);
+    this.napTimer = setTimeout(() => {
+      if (this.wanted) return;
+      this.connected.forEach((s) => s.kind === 'real' && s.nap());
+    }, ms);
   }
 
   get supported() {
@@ -241,6 +297,13 @@ export class Hub extends Emitter {
   bySide(side) {
     return this.sticks.find((s) => s.side === side && s.connected);
   }
+  /** A paired stick for this foot, connected or napping. */
+  known(side) {
+    return this.sticks.find((s) => s.side === side);
+  }
+  get napping() {
+    return this.sticks.filter((s) => !s.connected && s.napping);
+  }
 
   changed() {
     this.version++;
@@ -248,7 +311,14 @@ export class Hub extends Emitter {
   }
 
   track(stick) {
+    stick.hub = this;
     stick.on('change', () => this.changed());
+    stick.on('connected', () => {
+      // Back from a nap: show what the phone is showing, and nap again later
+      // if nothing needs it (e.g. woken by a press of A).
+      if (this.lastDisp) stick.send(this.lastDisp);
+      if (!this.wanted) this.scheduleNap(60000);
+    });
     stick.on('button', (b) => this.emit('button', b, stick));
     this.sticks.push(stick);
     this.changed();
@@ -295,6 +365,7 @@ export class Hub extends Emitter {
 
   display(title, value, sub) {
     const cmd = dispCommand(title, value, sub);
+    this.lastDisp = cmd;
     this.connected.forEach((s) => s.send(cmd));
   }
   /** Ask sticks to stream 20x a second (measuring) or 4x (saving battery). */

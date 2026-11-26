@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useHub, useLiveSlope, useStickButton, useStore, useFastStream } from '../hooks.js';
+import { useHub, useLiveSlope, useStickButton, useStore, useFastStream, useSticksAwake } from '../hooks.js';
 import { aimFromReadings, coach, missAdvice, standSlope } from '../lib/slope.js';
 import { store } from '../lib/store.js';
 import { Chips, Fingers, Level, fmt } from '../components/ui.jsx';
@@ -35,8 +35,11 @@ export default function Putt() {
   const abortRef = useRef(null);
   const live = useLiveSlope(calibration);
   useFastStream(step === 'measure');
+  // Sticks only need to be awake while you guess and measure; they nap after.
+  useSticksAwake(step === 'guess' || step === 'measure');
+  const waking = ['L', 'R'].filter((s) => calibration[s] && hub.known(s) && !hub.bySide(s));
 
-  const ready = ['L', 'R'].some((s) => calibration[s] && hub.bySide(s));
+  const ready = ['L', 'R'].some((s) => calibration[s] && hub.known(s));
   const wantReads = twoReads ? 2 : 1;
   const aim = useMemo(() => aimFromReadings(readings, settings), [readings, settings]);
   const tip = guessed && step !== 'guess' ? coach(guess, aim) : null;
@@ -64,6 +67,10 @@ export default function Putt() {
 
   async function measure() {
     if (progress != null || step !== 'measure') return;
+    if (waking.length) {
+      setError(`Still waking the ${waking.map((x) => (x === 'L' ? 'left' : 'right')).join(' and ')} stick. Press A on it, or try again in a few seconds.`);
+      return;
+    }
     setError('');
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -212,6 +219,12 @@ export default function Putt() {
             <b>Feeling it:</b> stand with your feet either side of the line. The foot that feels heavier is on the low side, and the ball breaks toward it.
           </div>
         </>
+      )}
+
+      {(step === 'guess' || step === 'measure') && waking.length > 0 && (
+        <div className="info-note">
+          Waking the {waking.map((x) => (x === 'L' ? 'left' : 'right')).join(' and ')} stick… usually under 15 s. Press <b>A</b> on a stick to wake it now.
+        </div>
       )}
 
       {step === 'measure' && (

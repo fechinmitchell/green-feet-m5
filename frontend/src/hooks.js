@@ -41,6 +41,14 @@ export function useFastStream(active) {
   }, [active, count]);
 }
 
+/** While `active`, keep the sticks awake (they nap otherwise). */
+export function useSticksAwake(active) {
+  useEffect(() => {
+    if (!active) return;
+    return hub.want();
+  }, [active]);
+}
+
 /** Live slope per foot (percent), updated ~10x a second. */
 export function useLiveSlope(calibration) {
   const [live, setLive] = useState({});

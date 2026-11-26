@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useHub, useStickButton, useStore, useFastStream } from '../hooks.js';
+import { useHub, useStickButton, useStore, useFastStream, useSticksAwake } from '../hooks.js';
 import { solveCalibration } from '../lib/slope.js';
 import { store } from '../lib/store.js';
 import { fmt } from '../components/ui.jsx';
@@ -24,6 +24,7 @@ export default function Calibrate() {
 
   const current = STEPS[step];
   useFastStream(!result);
+  useSticksAwake(true);
   const sides = hub.connected.map((s) => s.side).filter((s) => s === 'L' || s === 'R');
 
   useEffect(() => {
@@ -105,7 +106,7 @@ export default function Calibrate() {
     return (
       <div className="stack">
         <h1>Calibrate</h1>
-        <p>Connect your sticks first.</p>
+        <p>{hub.sticks.length ? 'Waking your sticks… usually under 15 s. Press A on a stick to wake it now.' : 'Connect your sticks first.'}</p>
         <Link to="/connect" className="btn primary">
           Connect sticks
         </Link>

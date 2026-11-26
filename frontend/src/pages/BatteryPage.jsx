@@ -87,6 +87,10 @@ export default function BatteryPage() {
                 <dd>{sum?.avgMa ? `${Math.round(sum.avgMa)} mA` : '–'}</dd>
               </div>
               <div>
+                <dt>Battery %</dt>
+                <dd>{s.accurate ? 'measured since last full charge' : 'estimated from voltage'}</dd>
+              </div>
+              <div>
                 <dt>Stick is</dt>
                 <dd>{!s.power ? '–' : s.charging ? 'charging' : [s.power.screenOn ? 'screen on' : 'screen off', s.power.fast ? 'fast updates' : 'slow updates'].join(', ')}</dd>
               </div>
@@ -112,6 +116,7 @@ export default function BatteryPage() {
               </div>
             </dl>
             {cap && <small className="hint">Measured capacity ≈ {cap} mAh (rated {CAPACITY_MAH}). Rough, because % is worked out from voltage.</small>}
+            {s.kind === 'real' && s.fw >= '1.6.0' && !s.accurate && <div className="note">Charge this stick until it’s full once. From then on its % comes from the charge counter, so it stops jumping around.</div>}
             {!s.power && s.kind === 'real' && <div className="note">Update this stick to v1.3.0 (Admin page) to see live current draw and the charge counter. Those make the time left much more accurate.</div>}
             <button className="btn ghost" onClick={() => store.logBattery(s.id, { side: s.side, fw: s.fw }, { t: Date.now(), pct: s.battery }, { newSession: true })}>
               Start a fresh battery test
