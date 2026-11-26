@@ -23,6 +23,24 @@ export function useStickButton(fn) {
   useEffect(() => hub.on('button', (b, stick) => ref.current(b, stick)), []);
 }
 
+/**
+ * While `active`, keep the sticks streaming fast (they fall back to slow on
+ * their own 30 s after the last request, so a closed tab can't waste battery).
+ */
+export function useFastStream(active) {
+  const h = useHub();
+  const count = h.connected.length;
+  useEffect(() => {
+    if (!active || !count) return;
+    hub.fast(true);
+    const id = setInterval(() => hub.fast(true), 10000);
+    return () => {
+      clearInterval(id);
+      hub.fast(false);
+    };
+  }, [active, count]);
+}
+
 /** Live slope per foot (percent), updated ~10x a second. */
 export function useLiveSlope(calibration) {
   const [live, setLive] = useState({});

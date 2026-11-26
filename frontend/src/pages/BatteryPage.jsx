@@ -83,6 +83,14 @@ export default function BatteryPage() {
                 <dd>{draw ? `${Math.round(draw)} mA` : s.power ? '–' : 'needs fw 1.3'}</dd>
               </div>
               <div>
+                <dt>Average this session</dt>
+                <dd>{sum?.avgMa ? `${Math.round(sum.avgMa)} mA` : '–'}</dd>
+              </div>
+              <div>
+                <dt>Stick is</dt>
+                <dd>{!s.power ? '–' : s.charging ? 'charging' : [s.power.screenOn ? 'screen on' : 'screen off', s.power.fast ? 'fast updates' : 'slow updates'].join(', ')}</dd>
+              </div>
+              <div>
                 <dt>Voltage</dt>
                 <dd>{s.power ? `${s.power.v.toFixed(2)} V` : '–'}</dd>
               </div>
@@ -122,7 +130,7 @@ export default function BatteryPage() {
       {hasMa && (
         <section className="card">
           <b>Current draw, last 15 min</b>
-          <small className="hint">Lower is better. Spikes are the screen waking or a beep.</small>
+          <small className="hint">Lower is better. It goes up while the screen is on and while you’re measuring (fast updates).</small>
           <LineChart series={maSeries} yMin={0} unit=" mA" label="Current draw in milliamps over time" />
         </section>
       )}

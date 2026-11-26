@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useHub, useLiveSlope, useStickButton, useStore } from '../hooks.js';
+import { useHub, useLiveSlope, useStickButton, useStore, useFastStream } from '../hooks.js';
 import { aimFromReadings, coach, missAdvice, standSlope } from '../lib/slope.js';
 import { store } from '../lib/store.js';
 import { Chips, Fingers, Level, fmt } from '../components/ui.jsx';
@@ -34,6 +34,7 @@ export default function Putt() {
   const demoGreen = useRef(newDemoGreen());
   const abortRef = useRef(null);
   const live = useLiveSlope(calibration);
+  useFastStream(step === 'measure');
 
   const ready = ['L', 'R'].some((s) => calibration[s] && hub.bySide(s));
   const wantReads = twoReads ? 2 : 1;

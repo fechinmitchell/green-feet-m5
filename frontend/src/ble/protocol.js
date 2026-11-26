@@ -28,6 +28,8 @@ export function parseBatt(dataView) {
     mah: dataView.getFloat32(8, le),
     pct: dataView.getUint8(12),
     charging: (dataView.getUint8(13) & 2) !== 0,
+    screenOn: (dataView.getUint8(13) & 4) !== 0, // firmware 1.4.0+
+    fast: (dataView.getUint8(13) & 8) !== 0,
   };
 }
 

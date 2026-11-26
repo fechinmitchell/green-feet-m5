@@ -81,7 +81,7 @@ export default function Connect() {
       {error && <p className="error">{error}</p>}
 
       <div className="tip">
-        <b>Fitting the sticks:</b> clip each stick to the <b>outside</b> of the shoe, screen facing out, long side along the shoe. Make it tight. If a stick moves, calibrate again. The 4-letter id on the stick’s screen tells you which is which.
+        <b>Fitting the sticks:</b> clip each stick to the <b>outside</b> of the shoe, screen facing out, long side along the shoe. Make it tight. If a stick moves, calibrate again. Sticks switch themselves off after 10 minutes without the app. Press the power button on the left side to turn one back on. The 4-letter id on the stick’s screen tells you which is which.
       </div>
 
       <div className="row-between">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useHub, useStickButton, useStore } from '../hooks.js';
+import { useHub, useStickButton, useStore, useFastStream } from '../hooks.js';
 import { solveCalibration } from '../lib/slope.js';
 import { store } from '../lib/store.js';
 import { fmt } from '../components/ui.jsx';
@@ -23,6 +23,7 @@ export default function Calibrate() {
   const spotRef = useRef({ cross: Math.random() * 4 - 2, along: Math.random() * 4 - 2 }); // demo only
 
   const current = STEPS[step];
+  useFastStream(!result);
   const sides = hub.connected.map((s) => s.side).filter((s) => s === 'L' || s === 'R');
 
   useEffect(() => {

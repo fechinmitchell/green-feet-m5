@@ -282,6 +282,11 @@ export class Hub extends Emitter {
     const cmd = dispCommand(title, value, sub);
     this.connected.forEach((s) => s.send(cmd));
   }
+  /** Ask sticks to stream 20x a second (measuring) or 4x (saving battery). */
+  fast(on) {
+    this.connected.forEach((s) => s.send(on ? 'rate:fast' : 'rate:slow'));
+  }
+
   beep(freq = 3000, ms = 150) {
     this.connected.forEach((s) => s.send(`beep:${freq},${ms}`));
   }
@@ -295,6 +300,7 @@ export class Hub extends Emitter {
     return new Promise((resolve, reject) => {
       const sticks = this.connected;
       if (!sticks.length) return reject(new Error('No sticks connected.'));
+      this.fast(true);
       let samples = new Map(sticks.map((s) => [s, []]));
       let start = performance.now();
       const deadline = start + timeout * 1000;
