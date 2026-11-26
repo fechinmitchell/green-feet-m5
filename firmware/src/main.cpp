@@ -20,11 +20,12 @@
 #define EVENT_UUID   "6a4e0003-6f1d-4b8e-9f33-6f72e3f2a7c1"  // notify: "A:<n>" / "B:<n>"
 #define CMD_UUID     "6a4e0004-6f1d-4b8e-9f33-6f72e3f2a7c1"  // write: text commands
 #define INFO_UUID    "6a4e0005-6f1d-4b8e-9f33-6f72e3f2a7c1"  // read: "fw=..;side=..;id=.."
+#define BATT_UUID    "6a4e0006-6f1d-4b8e-9f33-6f72e3f2a7c1"  // notify every 5 s: battery monitor, see sendBatt()
 
 static const int LED_PIN = 10;  // red LED, active low
 
 Preferences prefs;
-NimBLECharacteristic *tiltChr, *eventChr, *infoChr;
+NimBLECharacteristic *tiltChr, *eventChr, *infoChr, *battChr;
 volatile bool connected = false;
 char side = '?';
 char devId[5] = "0000";
@@ -57,11 +58,14 @@ String cmdBuf;
 // Battery: the raw voltage jumps around, so smooth it, then map it onto a
 // typical LiPo discharge curve (voltage is not linear with charge left).
 float battV = 0;
+float battMa = 0;  // smoothed battery current in mA: negative = draining, positive = charging
 bool charging = false;
 
 void updateBattery() {
   float v = M5.Axp.GetBatVoltage();
   battV = battV == 0 ? v : battV + 0.2f * (v - battV);
+  float ma = M5.Axp.GetBatCurrent();
+  battMa = battMa == 0 ? ma : battMa + 0.2f * (ma - battMa);
   charging = M5.Axp.GetBatChargeCurrent() > 1.0f;  // mA flowing into the battery
 }
 
@@ -213,11 +217,29 @@ void sendTilt() {
   tiltChr->notify();
 }
 
+// 16-byte battery packet, little endian:
+//   float32 volts   float32 mA (negative = draining)
+//   float32 coulomb counter in mAh since power-on (negative = used)
+//   uint8 battery %   uint8 flags (bit1 = charging)   uint16 sequence
+void sendBatt() {
+  static uint16_t seq = 0;
+  uint8_t buf[16];
+  float vals[3] = {battV, battMa, M5.Axp.GetCoulombData()};
+  memcpy(buf, vals, 12);
+  buf[12] = (uint8_t)batteryPct();
+  buf[13] = charging ? 2 : 0;
+  seq++;
+  memcpy(buf + 14, &seq, 2);
+  battChr->setValue(buf, sizeof(buf));
+  battChr->notify();
+}
+
 void setup() {
   M5.begin(true, true, false);
   setCpuFrequencyMhz(80);  // plenty for sensing + Bluetooth, uses much less power than 240
   M5.Imu.Init();
   M5.Lcd.setRotation(0);  // portrait, 135 x 240
+  M5.Axp.EnableCoulombcounter();  // counts mAh in and out of the battery
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH);
 
@@ -240,6 +262,7 @@ void setup() {
   NimBLECharacteristic *cmd = svc->createCharacteristic(CMD_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
   cmd->setCallbacks(new CmdCB());
   infoChr = svc->createCharacteristic(INFO_UUID, NIMBLE_PROPERTY::READ);
+  battChr = svc->createCharacteristic(BATT_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   updateInfo();
   svc->start();
 
@@ -258,7 +281,7 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t lastSample = 0, lastSend = 0, lastScreen = 0, lastBatt = 0;
+  static uint32_t lastSample = 0, lastSend = 0, lastScreen = 0, lastBatt = 0, lastBattSend = 0;
   uint32_t now = millis();
   M5.update();
   M5.Beep.update();
@@ -279,6 +302,10 @@ void loop() {
   if (connected && now - lastSend >= 50) {  // 20 Hz to the phone
     lastSend = now;
     sendTilt();
+  }
+  if (connected && now - lastBattSend >= 5000) {
+    lastBattSend = now;
+    sendBatt();
   }
 
   if (M5.BtnA.wasPressed()) { sendEvent('A'); beep(3200, 40); wakeScreen(); }
