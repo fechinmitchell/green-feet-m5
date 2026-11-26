@@ -25,6 +25,7 @@ export default function Putt() {
   const learn = settings.mode === 'learn';
   const [step, setStep] = useState(learn ? 'guess' : 'measure');
   const [guess, setGuess] = useState({ pct: 2, breaks: 'right', length: 'mid' });
+  const [guessed, setGuessed] = useState(false);
   const [twoReads, setTwoReads] = useState(false);
   const [readings, setReadings] = useState([]);
   const [progress, setProgress] = useState(null);
@@ -37,7 +38,7 @@ export default function Putt() {
   const ready = ['L', 'R'].some((s) => calibration[s] && hub.bySide(s));
   const wantReads = twoReads ? 2 : 1;
   const aim = useMemo(() => aimFromReadings(readings, settings), [readings, settings]);
-  const tip = learn && step !== 'guess' ? coach(guess, aim) : null;
+  const tip = guessed && step !== 'guess' ? coach(guess, aim) : null;
 
   // Demo feet follow where you'd be standing.
   useEffect(() => {
@@ -47,7 +48,7 @@ export default function Putt() {
 
   // Keep the stick screens in step with the phone.
   useEffect(() => {
-    if (step === 'guess') hub.display('PUTT ' + (putts.length + 1), 'GUESS', 'read it with\nyour feet');
+    if (step === 'guess') hub.display('PUTT ' + (putts.length + 1), 'GUESS', 'A = lock guess\nB = skip');
     if (step === 'measure') {
       const where = twoReads ? (readings.length === 0 ? 'ball half' : 'hole half') : 'halfway';
       hub.display(twoReads ? `READ ${readings.length + 1}/2` : 'READ', 'GO', `${where},\nface hole,\npress A`);
@@ -92,7 +93,7 @@ export default function Putt() {
       at: Date.now(),
       speed: settings.speed,
       mode: settings.mode,
-      guess: learn ? guess : null,
+      guess: guessed ? guess : null,
       readings: readings.map((r) => ({ cross: round2(r.cross), along: round2(r.along), spread: round2(r.spread) })),
       aim: aim && { cross: round2(aim.cross), along: round2(aim.along), fingers: aim.fingers, breaks: aim.breaks },
       outcome: result,
@@ -113,14 +114,22 @@ export default function Putt() {
     setStep(learn ? 'guess' : 'measure');
     setReadings([]);
     setTwoReads(false);
+    setGuessed(false);
     setOutcome(null);
     setError('');
   }
 
   useStickButton((b) => {
     if (b === 'A') {
-      if (step === 'guess') setStep('measure');
-      else if (step === 'measure') measure();
+      if (step === 'guess') {
+        setGuessed(true);
+        setStep('measure');
+      } else if (step === 'measure') measure();
+    }
+    if (b === 'B' && step === 'guess') {
+      setGuessed(false);
+      setStep('measure');
+      return;
     }
     if (b === 'B') {
       abortRef.current?.abort();
@@ -186,9 +195,17 @@ export default function Putt() {
           </div>
           <button className="btn primary big" onClick={() => {
             if (guess.length === 'long') setTwoReads(true);
+            setGuessed(true);
             setStep('measure');
           }}>
             Lock in my read
+          </button>
+          <button className="btn ghost" onClick={() => {
+            if (guess.length === 'long') setTwoReads(true);
+            setGuessed(false);
+            setStep('measure');
+          }}>
+            Skip guess, just read it <small>or B on a stick</small>
           </button>
           <div className="tip">
             <b>Feeling it:</b> stand with your feet either side of the line. The foot that feels heavier is on the low side, and the ball breaks toward it.
