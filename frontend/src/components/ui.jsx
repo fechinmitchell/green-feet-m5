@@ -3,6 +3,8 @@ import { useHub } from '../hooks.js';
 
 export function Layout({ children }) {
   const hub = useHub();
+  const low = hub.connected.filter((s) => s.battery != null && s.battery < 15 && !s.charging);
+  const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real');
   return (
     <div className="app">
       <header className="top">
@@ -14,15 +16,25 @@ export function Layout({ children }) {
           {['L', 'R'].map((side) => {
             const s = hub.bySide(side);
             return (
-              <Link to="/connect" key={side} className={`pill ${s ? 'on' : ''}`}>
-                <span className="dot" /> {side}
-                {s?.battery != null && <small>{s.battery}%</small>}
+              <Link to="/connect" key={side} className={`pill ${s ? 'on' : ''}`} aria-label={`${side === 'L' ? 'Left' : 'Right'} stick: ${s ? `${s.battery ?? '?'}% battery${s.charging ? ', charging' : ''}` : 'not connected'}`}>
+                <b>{side}</b>
+                {s ? <Battery pct={s.battery} charging={s.charging} /> : <small>off</small>}
               </Link>
             );
           })}
         </div>
       </header>
       {hub.demo && <div className="demo-banner">Demo mode · simulated sticks</div>}
+      {dropped.map((s) => (
+        <Link to="/connect" key={s.id} className="alert-banner">
+          {s.side === 'L' ? 'Left' : s.side === 'R' ? 'Right' : s.id} stick lost connection, reconnecting…
+        </Link>
+      ))}
+      {low.map((s) => (
+        <div key={s.id} className="alert-banner">
+          {s.side === 'L' ? 'Left' : 'Right'} stick battery low ({s.battery}%). Charge it with USB-C before your next round.
+        </div>
+      ))}
       <main className="page">{children}</main>
       <nav className="tabs">
         <NavLink to="/" end>Home</NavLink>
@@ -31,6 +43,23 @@ export function Layout({ children }) {
         <NavLink to="/settings">Settings</NavLink>
       </nav>
     </div>
+  );
+}
+
+/** Small battery gauge: fill shows charge, colour warns when low. */
+export function Battery({ pct, charging, big = false }) {
+  const level = pct == null ? 'unknown' : charging ? 'charging' : pct < 15 ? 'low' : pct < 35 ? 'mid' : 'ok';
+  const fill = pct == null ? 0 : Math.max(4, Math.min(100, pct));
+  return (
+    <span className={`battery ${level} ${big ? 'big' : ''}`}>
+      <svg viewBox="0 0 26 14" aria-hidden="true">
+        <rect x="1" y="1" width="21" height="12" rx="3" className="b-shell" />
+        <rect x="23" y="4.5" width="2" height="5" rx="1" className="b-tip" />
+        <rect x="3" y="3" width={(17 * fill) / 100} height="8" rx="1.5" className="b-fill" />
+        {charging && <path d="M12.5 2.5 L8.5 7.6 H11.5 L10.5 11.5 L14.5 6.4 H11.5 Z" className="b-bolt" />}
+      </svg>
+      <small>{pct == null ? '–' : `${pct}%`}</small>
+    </span>
   );
 }
 

@@ -30,6 +30,7 @@ class RealStick extends Emitter {
     this.side = '?';
     this.fw = '';
     this.battery = null;
+    this.charging = false;
     this.connected = false;
     this.latest = null;
     this.queue = Promise.resolve();
@@ -49,7 +50,11 @@ class RealStick extends Emitter {
     const tilt = await svc.getCharacteristic(TILT);
     tilt.addEventListener('characteristicvaluechanged', (e) => {
       const t = parseTilt(e.target.value);
-      this.battery = t.battery;
+      if (t.battery !== this.battery || t.charging !== this.charging) {
+        this.battery = t.battery;
+        this.charging = t.charging;
+        this.emit('change'); // battery gauge in the header updates live
+      }
       this.latest = { up: t.up, motion: t.motion, at: performance.now() };
       this.emit('tilt', this.latest);
     });
@@ -115,6 +120,7 @@ class DemoStick extends Emitter {
     this.side = side;
     this.fw = 'demo';
     this.battery = side === 'L' ? 86 : 74;
+    this.charging = false;
     this.connected = true;
     this.mount = randomMount(Math.random, 9);
     this.pose = { cross: 0, along: 0 };

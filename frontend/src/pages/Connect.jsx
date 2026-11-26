@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useHub } from '../hooks.js';
+import { Battery } from '../components/ui.jsx';
 
 export default function Connect() {
   const hub = useHub();
@@ -45,7 +46,7 @@ export default function Connect() {
               </div>
             </div>
             <div className="row">
-              {s?.battery != null && <span className="mono">{s.battery}%</span>}
+              {s && <Battery pct={s.battery} charging={s.charging} big />}
               <span className={`dot big ${s?.connected ? 'on' : ''}`} />
             </div>
           </div>

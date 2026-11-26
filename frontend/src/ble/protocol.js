@@ -6,13 +6,14 @@ export const CMD = '6a4e0004-6f1d-4b8e-9f33-6f72e3f2a7c1';
 export const INFO = '6a4e0005-6f1d-4b8e-9f33-6f72e3f2a7c1';
 export const NAME_PREFIX = 'GreenFeet';
 
-/** 20-byte tilt packet -> { up: [x,y,z], motion, battery, seq } */
+/** 20-byte tilt packet -> { up: [x,y,z], motion, battery, charging, seq } */
 export function parseTilt(dataView) {
   const le = true;
   return {
     up: [dataView.getFloat32(0, le), dataView.getFloat32(4, le), dataView.getFloat32(8, le)],
     motion: dataView.getFloat32(12, le),
     battery: dataView.getUint8(16),
+    charging: (dataView.getUint8(17) & 2) !== 0,
     seq: dataView.getUint16(18, le),
   };
 }

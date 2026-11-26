@@ -39,10 +39,26 @@ bool screenDirty = true;
 volatile bool pendingCmd = false;
 String cmdBuf;
 
-int batteryPct() {
+// Battery: the raw voltage jumps around, so smooth it, then map it onto a
+// typical LiPo discharge curve (voltage is not linear with charge left).
+float battV = 0;
+bool charging = false;
+
+void updateBattery() {
   float v = M5.Axp.GetBatVoltage();
-  int p = (int)((v - 3.3f) / (4.15f - 3.3f) * 100.0f);
-  return constrain(p, 0, 100);
+  battV = battV == 0 ? v : battV + 0.2f * (v - battV);
+  charging = M5.Axp.GetBatChargeCurrent() > 1.0f;  // mA flowing into the battery
+}
+
+int batteryPct() {
+  static const float volts[] = {3.40f, 3.60f, 3.70f, 3.80f, 3.95f, 4.15f};
+  static const float pct[] = {0, 10, 25, 50, 75, 100};
+  float v = battV;
+  if (v <= volts[0]) return 0;
+  for (int i = 1; i < 6; i++) {
+    if (v <= volts[i]) return (int)(pct[i - 1] + (v - volts[i - 1]) / (volts[i] - volts[i - 1]) * (pct[i] - pct[i - 1]));
+  }
+  return 100;
 }
 
 void updateInfo() {
@@ -66,7 +82,9 @@ void drawScreen() {
   lcd.drawString(side == '?' ? "?" : String(side), 22, 8);
   lcd.fillCircle(67, 20, 6, connected ? GREEN : DARKGREY);
   lcd.setTextSize(1);
-  lcd.drawString(String(batteryPct()) + "%", 110, 16);
+  int bp = batteryPct();
+  lcd.setTextColor(charging ? CYAN : bp < 15 ? RED : bp < 35 ? YELLOW : WHITE, BLACK);
+  lcd.drawString(String(charging ? "+" : "") + String(bp) + "%", 108, 16);
 
   if (!connected) {
     lcd.setTextSize(2);
@@ -163,14 +181,14 @@ void sendEvent(char button) {
 // 20-byte packet, little endian:
 //   float32 ax, ay, az   smoothed acceleration in g (sensor frame)
 //   float32 motion       smoothed |a - mean| in g, small when standing still
-//   uint8   battery %    uint8 flags (bit0 = side known)   uint16 sequence
+//   uint8   battery %    uint8 flags (bit0 = side known, bit1 = charging)   uint16 sequence
 void sendTilt() {
   static uint16_t seq = 0;
   uint8_t buf[20];
   float vals[4] = {fx, fy, fz, motion};
   memcpy(buf, vals, 16);
   buf[16] = (uint8_t)batteryPct();
-  buf[17] = side == '?' ? 0 : 1;
+  buf[17] = (side == '?' ? 0 : 1) | (charging ? 2 : 0);
   seq++;
   memcpy(buf + 18, &seq, 2);
   tiltChr->setValue(buf, sizeof(buf));
@@ -215,12 +233,13 @@ void setup() {
   float ax, ay, az;
   M5.Imu.getAccelData(&ax, &ay, &az);
   fx = ax; fy = ay; fz = az;
+  updateBattery();
   drawScreen();
   beep(2000, 60);
 }
 
 void loop() {
-  static uint32_t lastSample = 0, lastSend = 0, lastScreen = 0;
+  static uint32_t lastSample = 0, lastSend = 0, lastScreen = 0, lastBatt = 0;
   uint32_t now = millis();
   M5.update();
   M5.Beep.update();
@@ -250,6 +269,13 @@ void loop() {
     pendingCmd = false;
     String c = cmdBuf;
     handleCommand(c);
+  }
+
+  if (now - lastBatt >= 2000) {
+    lastBatt = now;
+    bool wasCharging = charging;
+    updateBattery();
+    if (wasCharging != charging) screenDirty = true;
   }
 
   // Refresh the battery figure now and then, redraw when something changed.
