@@ -21,6 +21,15 @@ class Emitter {
   }
 }
 
+// Battery readings over time, for the "time left" estimate.
+function recordBattery() {
+  if (this.charging) {
+    this.battHistory = [];
+    return;
+  }
+  this.battHistory = [...(this.battHistory || []), { t: Date.now(), pct: this.battery }].slice(-300);
+}
+
 class RealStick extends Emitter {
   constructor(device) {
     super();
@@ -35,6 +44,10 @@ class RealStick extends Emitter {
     this.latest = null;
     this.queue = Promise.resolve();
     device.addEventListener('gattserverdisconnected', () => this.onDrop());
+  }
+
+  recordBattery() {
+    recordBattery.call(this);
   }
 
   async connect() {
@@ -53,6 +66,7 @@ class RealStick extends Emitter {
       if (t.battery !== this.battery || t.charging !== this.charging) {
         this.battery = t.battery;
         this.charging = t.charging;
+        this.recordBattery();
         this.emit('change'); // battery gauge in the header updates live
       }
       this.latest = { up: t.up, motion: t.motion, at: performance.now() };
@@ -121,6 +135,8 @@ class DemoStick extends Emitter {
     this.fw = 'demo';
     this.battery = side === 'L' ? 86 : 74;
     this.charging = false;
+    this.ticks = 0;
+    this.recordBattery();
     this.connected = true;
     this.mount = randomMount(Math.random, 9);
     this.pose = { cross: 0, along: 0 };
@@ -131,7 +147,16 @@ class DemoStick extends Emitter {
     this.pose = pose;
     this.motion = 0.15; // you just moved
   }
+  recordBattery() {
+    recordBattery.call(this);
+  }
   tick() {
+    // Drain about 1% every 108 s, like a real stick on power-saving firmware.
+    if (++this.ticks % 2160 === 0 && this.battery > 0) {
+      this.battery--;
+      this.recordBattery();
+      this.emit('change');
+    }
     this.motion = Math.max(0.003, this.motion * 0.9);
     const up = noisy(sensorUp(this.mount, this.pose.cross, this.pose.along), 0.0015 + this.motion * 0.2);
     this.latest = { up, motion: this.motion, at: performance.now() };

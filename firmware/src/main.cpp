@@ -36,6 +36,21 @@ uint32_t eventCount = 0;
 // What the screen should show. Set by the phone via "disp:" commands.
 String dTitle = "", dValue = "", dSub = "";
 bool screenDirty = true;
+
+// Power saving. The backlight is the biggest drain after Bluetooth, so the
+// screen switches off 20 s after the last button press or phone update.
+const uint32_t SCREEN_MS = 20000;
+uint32_t screenOnUntil = SCREEN_MS;
+bool screenOn = true;
+volatile bool wakeRequested = false;
+
+void wakeScreen() {
+  screenOnUntil = millis() + SCREEN_MS;
+  if (!screenOn) {
+    M5.Axp.SetLDO2(true);  // LDO2 powers the LCD backlight
+    screenOn = true;
+  }
+}
 volatile bool pendingCmd = false;
 String cmdBuf;
 
@@ -148,18 +163,21 @@ void handleCommand(const String &cmd) {
     digitalWrite(LED_PIN, cmd.charAt(4) == '1' ? LOW : HIGH);
   }
   screenDirty = true;
+  wakeScreen();
 }
 
 class ServerCB : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer *s) override {
     connected = true;
     screenDirty = true;
+    wakeRequested = true;
     // Allow a second phone/app connection slot? No: one phone at a time.
   }
   void onDisconnect(NimBLEServer *s) override {
     connected = false;
     dTitle = dValue = dSub = "";
     screenDirty = true;
+    wakeRequested = true;
     NimBLEDevice::startAdvertising();
   }
 };
@@ -197,6 +215,7 @@ void sendTilt() {
 
 void setup() {
   M5.begin(true, true, false);
+  setCpuFrequencyMhz(80);  // plenty for sensing + Bluetooth, uses much less power than 240
   M5.Imu.Init();
   M5.Lcd.setRotation(0);  // portrait, 135 x 240
   pinMode(LED_PIN, OUTPUT);
@@ -262,8 +281,13 @@ void loop() {
     sendTilt();
   }
 
-  if (M5.BtnA.wasPressed()) { sendEvent('A'); beep(3200, 40); }
-  if (M5.BtnB.wasPressed()) { sendEvent('B'); beep(1800, 40); }
+  if (M5.BtnA.wasPressed()) { sendEvent('A'); beep(3200, 40); wakeScreen(); }
+  if (M5.BtnB.wasPressed()) { sendEvent('B'); beep(1800, 40); wakeScreen(); }
+  if (wakeRequested) { wakeRequested = false; wakeScreen(); }
+  if (screenOn && !charging && (int32_t)(now - screenOnUntil) > 0) {
+    M5.Axp.SetLDO2(false);
+    screenOn = false;
+  }
 
   if (pendingCmd) {
     pendingCmd = false;

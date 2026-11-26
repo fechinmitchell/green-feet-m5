@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useHub } from '../hooks.js';
+import { useHub, useBatteryEstimates } from '../hooks.js';
+import { formatMinutes } from '../lib/battery.js';
 import { Battery } from '../components/ui.jsx';
 
 export default function Connect() {
   const hub = useHub();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const est = useBatteryEstimates();
 
   async function pair() {
     setError('');
@@ -44,6 +46,7 @@ export default function Connect() {
               <div className="mono">
                 {s ? `${s.kind === 'demo' ? 'demo' : 'id ' + s.id} · ${s.connected ? 'connected' : 'reconnecting…'}${s.fw && s.kind !== 'demo' ? ' · fw ' + s.fw : ''}` : 'not connected'}
               </div>
+              {s?.connected && est[side] && <TimeLeft e={est[side]} />}
             </div>
             <div className="row">
               {s && <Battery pct={s.battery} charging={s.charging} big />}
@@ -89,6 +92,16 @@ export default function Connect() {
           Next: calibrate →
         </Link>
       </div>
+    </div>
+  );
+}
+
+function TimeLeft({ e }) {
+  if (e.charging) return <div className="time-left">Charging</div>;
+  return (
+    <div className="time-left">
+      <b>≈ {formatMinutes(e.minutes)}</b> left
+      <small>{e.source === 'measured' ? ' · measured' : e.source === 'learned' ? ' · from last time' : ' · rough guess until it has run 10 min'}</small>
     </div>
   );
 }

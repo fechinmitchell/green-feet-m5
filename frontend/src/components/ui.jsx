@@ -1,9 +1,11 @@
 import { Link, NavLink } from 'react-router-dom';
-import { useHub } from '../hooks.js';
+import { useHub, useBatteryEstimates } from '../hooks.js';
+import { formatMinutes } from '../lib/battery.js';
 
 export function Layout({ children }) {
   const hub = useHub();
-  const low = hub.connected.filter((s) => s.battery != null && s.battery < 15 && !s.charging);
+  const est = useBatteryEstimates();
+  const low = hub.connected.filter((s) => s.battery != null && !s.charging && (s.battery < 15 || (est[s.side]?.minutes ?? 999) < 30));
   const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real');
   return (
     <div className="app">
@@ -32,7 +34,7 @@ export function Layout({ children }) {
       ))}
       {low.map((s) => (
         <div key={s.id} className="alert-banner">
-          {s.side === 'L' ? 'Left' : 'Right'} stick battery low ({s.battery}%). Charge it with USB-C before your next round.
+          {s.side === 'L' ? 'Left' : 'Right'} stick battery low: {s.battery}%, about {formatMinutes(est[s.side]?.minutes)} left. Charge it with USB-C.
         </div>
       ))}
       <main className="page">{children}</main>

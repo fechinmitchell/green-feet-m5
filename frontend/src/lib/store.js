@@ -7,6 +7,7 @@ const defaults = {
   settings: { speed: 'medium', mode: 'learn', holeWeight: 2 / 3, fingerScale: 1 },
   calibration: {}, // { L: {u,f,r,at}, R: {...} }
   putts: [],
+  batteryRates: {}, // stick id -> measured drain, % per minute
 };
 
 function read() {
@@ -48,6 +49,10 @@ export const store = {
   },
   addPutt(putt) {
     state = { ...state, putts: [...state.putts, putt] };
+    write();
+  },
+  setBatteryRate(id, rate) {
+    state = { ...state, batteryRates: { ...state.batteryRates, [id]: rate } };
     write();
   },
   clearPutts() {

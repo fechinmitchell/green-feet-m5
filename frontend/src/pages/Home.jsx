@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { useHub, useStore } from '../hooks.js';
+import { useHub, useStore, useBatteryEstimates } from '../hooks.js';
+import { formatMinutes, MIN_PER_HOLE } from '../lib/battery.js';
 import { SPEEDS } from '../lib/slope.js';
 
 export default function Home() {
@@ -7,6 +8,9 @@ export default function Home() {
   const { settings, calibration, putts } = useStore();
   const connected = hub.connected.length;
   const calibrated = ['L', 'R'].filter((s) => calibration[s]).length;
+  const est = useBatteryEstimates();
+  const running = Object.entries(est).filter(([, e]) => !e.charging && e.minutes != null);
+  const weakest = running.sort((a, b) => a[1].minutes - b[1].minutes)[0];
   const today = putts.filter((p) => new Date(p.at).toDateString() === new Date().toDateString()).length;
 
   const steps = [
@@ -36,6 +40,18 @@ export default function Home() {
           </li>
         ))}
       </ol>
+
+      {weakest && (
+        <div className={`card row-between battery-card ${weakest[1].minutes < 60 ? 'warn' : ''}`}>
+          <span>
+            <b>Battery: ≈ {formatMinutes(weakest[1].minutes)}</b>
+            <small> · about {Math.max(0, Math.floor(weakest[1].minutes / MIN_PER_HOLE))} holes</small>
+          </span>
+          <span className="mono">
+            {running.length > 1 ? `${weakest[0] === 'L' ? 'left' : 'right'} stick runs out first` : `${weakest[0] === 'L' ? 'left' : 'right'} stick`}
+          </span>
+        </div>
+      )}
 
       <Link to="/putt" className={`btn primary big ${ready ? '' : 'disabled'}`} aria-disabled={!ready}>
         Start a putt
