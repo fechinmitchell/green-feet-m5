@@ -76,6 +76,7 @@ a { color: inherit; }
 .time-left small { color: var(--muted); }
 .battery-card small { color: var(--muted); }
 .battery-card.warn { border-color: var(--flag); }
+.info-banner { background: var(--green-soft); color: var(--ink); text-align: center; font-size: .85rem; font-weight: 600; padding: 6px 16px; }
 .alert-banner { display: block; background: var(--flag); color: #fff; text-align: center; font-size: .85rem; font-weight: 700; padding: 6px 16px; text-decoration: none; }
 .demo-banner { background: var(--sun); color: #2a2000; text-align: center; font-size: .8rem; font-weight: 700; padding: 4px; }
 

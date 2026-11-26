@@ -7,7 +7,8 @@ export function Layout({ children }) {
   const est = useBatteryEstimates();
   useBatteryLogger();
   const low = hub.connected.filter((s) => s.battery != null && !s.charging && (s.battery < 15 || (est[s.side]?.minutes ?? 999) < 30));
-  const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real');
+  const dropped = hub.sticks.filter((s) => !s.connected && s.kind === 'real' && !s.asleep);
+  const asleep = hub.sticks.filter((s) => !s.connected && s.kind === 'real' && s.asleep);
   return (
     <div className="app">
       <header className="top">
@@ -28,6 +29,11 @@ export function Layout({ children }) {
         </div>
       </header>
       {hub.demo && <div className="demo-banner">Demo mode · simulated sticks</div>}
+      {asleep.map((s) => (
+        <div key={s.id} className="info-banner">
+          {s.side === 'L' ? 'Left' : s.side === 'R' ? 'Right' : s.id} stick is off. Hold A for 1 second to turn it on, and it reconnects by itself.
+        </div>
+      ))}
       {dropped.map((s) => (
         <Link to="/connect" key={s.id} className="alert-banner">
           {s.side === 'L' ? 'Left' : s.side === 'R' ? 'Right' : s.id} stick lost connection, reconnecting…

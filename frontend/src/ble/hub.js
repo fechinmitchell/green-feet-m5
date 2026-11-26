@@ -70,8 +70,8 @@ class RealStick extends Emitter {
     this.side = parsed.side === 'L' || parsed.side === 'R' ? parsed.side : '?';
     if (parsed.id) this.id = parsed.id;
 
-    const tilt = await svc.getCharacteristic(TILT);
-    tilt.addEventListener('characteristicvaluechanged', (e) => {
+    // Handlers are created once and re-attached on reconnect, never doubled up.
+    this.onTilt ||= (e) => {
       const t = parseTilt(e.target.value);
       if (t.battery !== this.battery || t.charging !== this.charging) {
         this.battery = t.battery;
@@ -81,21 +81,29 @@ class RealStick extends Emitter {
       }
       this.latest = { up: t.up, motion: t.motion, at: performance.now() };
       this.emit('tilt', this.latest);
-    });
-    await tilt.startNotifications();
-
-    const evt = await svc.getCharacteristic(EVENT);
-    evt.addEventListener('characteristicvaluechanged', (e) => {
+    };
+    this.onEvent ||= (e) => {
       const text = new TextDecoder().decode(e.target.value);
+      if (text.charAt(0) === 'S') {
+        this.asleep = true; // switched off on purpose (held A)
+        this.emit('change');
+        return;
+      }
       this.emit('button', text.charAt(0));
-    });
-    await evt.startNotifications();
+    };
+    this.onBatt ||= (e) => this.setPower(parseBatt(e.target.value));
 
+    const listen = async (uuid, handler) => {
+      const chr = await svc.getCharacteristic(uuid);
+      chr.removeEventListener('characteristicvaluechanged', handler);
+      chr.addEventListener('characteristicvaluechanged', handler);
+      await chr.startNotifications();
+    };
+    await listen(TILT, this.onTilt);
+    await listen(EVENT, this.onEvent);
     // Battery monitor (firmware 1.3.0+). Older sticks just don't have it.
     try {
-      const batt = await svc.getCharacteristic(BATT);
-      batt.addEventListener('characteristicvaluechanged', (e) => this.setPower(parseBatt(e.target.value)));
-      await batt.startNotifications();
+      await listen(BATT, this.onBatt);
     } catch {
       this.power = null;
     }
@@ -107,16 +115,23 @@ class RealStick extends Emitter {
   async onDrop() {
     this.connected = false;
     this.emit('change');
-    // Walking around the green can drop the link for a moment. Try to come back.
-    for (let i = 0; i < 5 && !this.closing; i++) {
-      await new Promise((r) => setTimeout(r, 1000 + i * 1000));
+    // Walking around the green can drop the link for a moment, and a stick
+    // switched off with A can be woken again. Keep trying for 15 minutes.
+    if (this.reconnecting) return;
+    this.reconnecting = true;
+    const until = Date.now() + 15 * 60000;
+    for (let i = 0; Date.now() < until && !this.closing && !this.connected; i++) {
+      await new Promise((r) => setTimeout(r, Math.min(5000, 1000 + i * 1000)));
       try {
         await this.connect();
-        return;
+        this.asleep = false;
+        this.emit('change');
+        break;
       } catch {
         /* keep trying */
       }
     }
+    this.reconnecting = false;
   }
 
   send(text) {
